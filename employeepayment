@@ -1,0 +1,946 @@
+package newpackage;
+
+import java.awt.BorderLayout;
+import java.awt.Color;
+import java.awt.Dimension;
+import java.awt.Font;
+import java.awt.Graphics;
+import java.awt.Graphics2D;
+import java.awt.print.Printable;
+import java.awt.print.PrinterException;
+import java.awt.print.PrinterJob;
+import java.sql.Connection;
+import java.sql.DriverManager;
+import java.sql.PreparedStatement;
+import java.sql.ResultSet;
+import java.sql.SQLException;
+import java.time.LocalDate;
+import java.time.LocalDateTime;
+import java.time.format.DateTimeFormatter;
+import java.util.ArrayList;
+import java.util.HashMap;
+import java.util.List;
+import java.util.Map;
+import javax.swing.BorderFactory;
+import javax.swing.JButton;
+import javax.swing.JDialog;
+import javax.swing.JOptionPane;
+import javax.swing.JPanel;
+import javax.swing.JScrollPane;
+import javax.swing.JTextArea;
+
+/**
+ *
+ * @author rhain
+ */
+public class employeepayment extends javax.swing.JFrame {
+
+    private static final java.util.logging.Logger logger =
+        java.util.logging.Logger.getLogger(employeepayment.class.getName());
+
+    private String loggedInCashierName = "Unknown User";
+    private String currentUser         = "Employee";
+
+    private static final String DB_URL      = "jdbc:mysql://localhost:3306/dbregister?zeroDateTimeBehavior=CONVERT_TO_NULL";
+    private static final String DB_USER     = "root";
+    private static final String DB_PASSWORD = "";
+
+    public employeepayment() {
+        this("Unknown User");
+    }
+
+    public employeepayment(String cashierName) {
+        this.currentUser         = (cashierName != null && !cashierName.isEmpty()) ? cashierName : "Unknown User";
+        this.loggedInCashierName = this.currentUser;
+        initComponents();
+        q2.setText(currentUser);
+        q2.setEditable(false);
+        setupSlotAutoFill();
+    }
+
+    private void setupSlotAutoFill() {
+        w1.addActionListener(e -> fetchNameBySlot());
+        w1.addFocusListener(new java.awt.event.FocusAdapter() {
+            @Override
+            public void focusLost(java.awt.event.FocusEvent e) {
+                fetchNameBySlot();
+            }
+        });
+    }
+
+    private void fetchNameBySlot() {
+        String slotNum = w1.getText().trim();
+        if (slotNum.isEmpty()) return;
+
+        try (Connection conn = DriverManager.getConnection(DB_URL, DB_USER, DB_PASSWORD)) {
+            PreparedStatement pst = conn.prepareStatement(
+                "SELECT Name FROM clientdata WHERE SlotNum = ? LIMIT 1");
+            pst.setString(1, slotNum);
+            ResultSet rs = pst.executeQuery();
+            if (rs.next()) {
+                q1.setText(rs.getString("Name"));
+            } else {
+                q1.setText("");
+                JOptionPane.showMessageDialog(this,
+                    "No customer found for Slot #" + slotNum,
+                    "Slot Not Found", JOptionPane.WARNING_MESSAGE);
+            }
+        } catch (Exception ex) {
+            System.err.println("Auto-fill error: " + ex.getMessage());
+        }
+    }
+
+    @SuppressWarnings("unchecked")
+    // <editor-fold defaultstate="collapsed" desc="Generated Code">
+    private void initComponents() {
+
+        jPanel1   = new javax.swing.JPanel();
+        jLabel7   = new javax.swing.JLabel();
+        jButton2  = new javax.swing.JButton();
+        jLabel1   = new javax.swing.JLabel();
+        jButton1  = new javax.swing.JButton();
+        jPanel2   = new javax.swing.JPanel();
+        contact   = new javax.swing.JLabel();
+        costumer  = new javax.swing.JLabel();
+        q         = new javax.swing.JTextField();
+        costumer1 = new javax.swing.JLabel();
+        q1        = new javax.swing.JTextField();
+        w1        = new javax.swing.JTextField();
+        jButton7  = new javax.swing.JButton();
+        q2        = new javax.swing.JTextField();
+        costumer2 = new javax.swing.JLabel();
+        jButton10 = new javax.swing.JButton();
+        jButton3  = new javax.swing.JButton();
+        q3        = new javax.swing.JTextField();
+
+        setDefaultCloseOperation(javax.swing.WindowConstants.EXIT_ON_CLOSE);
+
+        jPanel1.setBackground(new java.awt.Color(0, 153, 255));
+        jPanel1.setLayout(new org.netbeans.lib.awtextra.AbsoluteLayout());
+
+        jLabel7.setFont(new java.awt.Font("Segoe UI Black", 0, 60));
+        jLabel7.setForeground(new java.awt.Color(255, 255, 255));
+        jLabel7.setText("PAYMENT");
+        jPanel1.add(jLabel7, new org.netbeans.lib.awtextra.AbsoluteConstraints(560, 20, -1, -1));
+
+        jButton2.setFont(new java.awt.Font("Segoe UI Black", 0, 12));
+        jButton2.setForeground(new java.awt.Color(0, 153, 204));
+        jButton2.setText("REGISTER");
+        jButton2.addActionListener(new java.awt.event.ActionListener() {
+            public void actionPerformed(java.awt.event.ActionEvent evt) {
+                jButton2ActionPerformed(evt);
+            }
+        });
+        jPanel1.add(jButton2, new org.netbeans.lib.awtextra.AbsoluteConstraints(40, 200, 220, 70));
+
+        jLabel1.setIcon(new javax.swing.ImageIcon(getClass().getResource("/images/download-removebg-preview (1).png")));
+        jPanel1.add(jLabel1, new org.netbeans.lib.awtextra.AbsoluteConstraints(20, 20, 240, 130));
+
+        jButton1.setBackground(new java.awt.Color(0, 153, 204));
+        jButton1.setFont(new java.awt.Font("Segoe UI Black", 0, 12));
+        jButton1.setForeground(new java.awt.Color(255, 255, 255));
+        jButton1.setText("Payment");
+        jButton1.addActionListener(new java.awt.event.ActionListener() {
+            public void actionPerformed(java.awt.event.ActionEvent evt) {
+                jButton1ActionPerformed(evt);
+            }
+        });
+        jPanel1.add(jButton1, new org.netbeans.lib.awtextra.AbsoluteConstraints(40, 400, 220, 70));
+
+        jPanel2.setBackground(new java.awt.Color(0, 153, 204));
+        jPanel2.setBorder(javax.swing.BorderFactory.createLineBorder(new java.awt.Color(255, 255, 255), 3));
+        jPanel2.setCursor(new java.awt.Cursor(java.awt.Cursor.DEFAULT_CURSOR));
+        jPanel2.setLayout(new org.netbeans.lib.awtextra.AbsoluteLayout());
+
+        contact.setFont(new java.awt.Font("Segoe UI Black", 0, 30));
+        contact.setForeground(new java.awt.Color(255, 255, 255));
+        contact.setText("Name");
+        jPanel2.add(contact, new org.netbeans.lib.awtextra.AbsoluteConstraints(20, 120, -1, -1));
+
+        costumer.setFont(new java.awt.Font("Segoe UI Black", 0, 30));
+        costumer.setForeground(new java.awt.Color(255, 255, 255));
+        costumer.setText("Cashier Name:");
+        jPanel2.add(costumer, new org.netbeans.lib.awtextra.AbsoluteConstraints(10, 230, -1, -1));
+
+        // q = money field
+        q.setForeground(new java.awt.Color(0, 153, 204));
+        jPanel2.add(q, new org.netbeans.lib.awtextra.AbsoluteConstraints(280, 300, 560, 48));
+
+        costumer1.setFont(new java.awt.Font("Segoe UI Black", 0, 30));
+        costumer1.setForeground(new java.awt.Color(255, 255, 255));
+        costumer1.setText("Slot num:");
+        jPanel2.add(costumer1, new org.netbeans.lib.awtextra.AbsoluteConstraints(30, 10, -1, -1));
+
+        q1.setForeground(new java.awt.Color(0, 153, 204));
+        jPanel2.add(q1, new org.netbeans.lib.awtextra.AbsoluteConstraints(280, 120, 560, 48));
+
+        w1.setForeground(new java.awt.Color(0, 153, 204));
+        w1.addActionListener(new java.awt.event.ActionListener() {
+            public void actionPerformed(java.awt.event.ActionEvent evt) {
+                w1ActionPerformed(evt);
+            }
+        });
+        jPanel2.add(w1, new org.netbeans.lib.awtextra.AbsoluteConstraints(280, 10, 570, 48));
+
+        jButton7.setFont(new java.awt.Font("Segoe UI Black", 0, 30));
+        jButton7.setForeground(new java.awt.Color(0, 153, 255));
+        jButton7.setText("PAY");
+        jButton7.addActionListener(new java.awt.event.ActionListener() {
+            public void actionPerformed(java.awt.event.ActionEvent evt) {
+                jButton7ActionPerformed(evt);
+            }
+        });
+        jPanel2.add(jButton7, new org.netbeans.lib.awtextra.AbsoluteConstraints(490, 360, 100, 60));
+
+        // q2 = cashier name (read-only, auto-filled from login)
+        q2.setForeground(new java.awt.Color(0, 153, 204));
+        jPanel2.add(q2, new org.netbeans.lib.awtextra.AbsoluteConstraints(280, 230, 560, 48));
+
+        costumer2.setFont(new java.awt.Font("Segoe UI Black", 0, 30));
+        costumer2.setForeground(new java.awt.Color(255, 255, 255));
+        costumer2.setText("\u20b1 Money");
+        jPanel2.add(costumer2, new org.netbeans.lib.awtextra.AbsoluteConstraints(40, 300, -1, -1));
+
+        jButton10.setFont(new java.awt.Font("Segoe UI Black", 0, 12));
+        jButton10.setForeground(new java.awt.Color(0, 153, 255));
+        jButton10.setText("Check slot");
+        jButton10.addActionListener(new java.awt.event.ActionListener() {
+            public void actionPerformed(java.awt.event.ActionEvent evt) {
+                jButton10ActionPerformed(evt);
+            }
+        });
+        jPanel2.add(jButton10, new org.netbeans.lib.awtextra.AbsoluteConstraints(30, 50, 190, 20));
+
+        jPanel1.add(jPanel2, new org.netbeans.lib.awtextra.AbsoluteConstraints(310, 110, 960, 500));
+
+        jButton3.setFont(new java.awt.Font("Segoe UI Black", 0, 12));
+        jButton3.setForeground(new java.awt.Color(0, 153, 255));
+        jButton3.setText("LIST OF CUSTOMER ");
+        jButton3.addActionListener(new java.awt.event.ActionListener() {
+            public void actionPerformed(java.awt.event.ActionEvent evt) {
+                jButton3ActionPerformed(evt);
+            }
+        });
+        jPanel1.add(jButton3, new org.netbeans.lib.awtextra.AbsoluteConstraints(40, 300, 220, 70));
+
+        javax.swing.GroupLayout layout = new javax.swing.GroupLayout(getContentPane());
+        getContentPane().setLayout(layout);
+        layout.setHorizontalGroup(
+            layout.createParallelGroup(javax.swing.GroupLayout.Alignment.LEADING)
+            .addGroup(layout.createSequentialGroup()
+                .addComponent(jPanel1, javax.swing.GroupLayout.PREFERRED_SIZE, 1424, javax.swing.GroupLayout.PREFERRED_SIZE)
+                .addGap(0, 0, Short.MAX_VALUE))
+        );
+        layout.setVerticalGroup(
+            layout.createParallelGroup(javax.swing.GroupLayout.Alignment.LEADING)
+            .addGroup(layout.createSequentialGroup()
+                .addComponent(jPanel1, javax.swing.GroupLayout.PREFERRED_SIZE, 872, javax.swing.GroupLayout.PREFERRED_SIZE)
+                .addGap(0, 0, Short.MAX_VALUE))
+        );
+
+        pack();
+    }// </editor-fold>
+
+    private void jButton2ActionPerformed(java.awt.event.ActionEvent evt) {
+        registeremployee registerFrame = new registeremployee(loggedInCashierName);
+        registerFrame.setLocationRelativeTo(null);
+        registerFrame.setVisible(true);
+        dispose();
+    }
+
+    private void jButton1ActionPerformed(java.awt.event.ActionEvent evt) {
+        employeepayment registerFrame = new employeepayment(loggedInCashierName);
+        registerFrame.setLocationRelativeTo(null);
+        registerFrame.setVisible(true);
+        dispose();
+    }
+
+    private void w1ActionPerformed(java.awt.event.ActionEvent evt) {
+        
+    }
+
+    private void jButton7ActionPerformed(java.awt.event.ActionEvent evt) {
+        String slotNum     = w1.getText().trim();
+        String name        = q1.getText().trim();
+        String cashierName = q2.getText().trim();
+        String money       = q.getText().trim();
+
+        if (slotNum.isEmpty() || name.isEmpty() || cashierName.isEmpty() || money.isEmpty()) {
+            JOptionPane.showMessageDialog(this, "Please fill in all fields!");
+            return;
+        }
+
+        if (!money.matches("^[0-9]+(\\.[0-9]{1,2})?$")) {
+            JOptionPane.showMessageDialog(this,
+                "Invalid money format. Use numbers only (e.g. 699 or 1398.00)");
+            return;
+        }
+
+        double paymentAmount = Double.parseDouble(money);
+
+        
+        double minPayment      = 699.0;
+        String planRateDisplay = "\u20b1699";
+
+        try (Connection connCheck = DriverManager.getConnection(DB_URL, DB_USER, DB_PASSWORD)) {
+            PreparedStatement psRate = connCheck.prepareStatement(
+                "SELECT PlanRate FROM clientdata WHERE SlotNum = ?");
+            psRate.setString(1, slotNum);
+            ResultSet rsRate = psRate.executeQuery();
+            if (rsRate.next() && rsRate.getString("PlanRate") != null) {
+                try {
+                    minPayment = Double.parseDouble(rsRate.getString("PlanRate"));
+                    planRateDisplay = "\u20b1" + (minPayment % 1 == 0
+                        ? String.valueOf((int) minPayment)
+                        : String.format("%.2f", minPayment));
+                } catch (NumberFormatException ignored) { }
+            }
+        } catch (Exception ex) {
+            System.err.println("PlanRate fetch error: " + ex.getMessage());
+        }
+
+        if (paymentAmount < minPayment) {
+            JOptionPane.showMessageDialog(this,
+                "Minimum payment for Slot #" + slotNum + " is " + planRateDisplay + ".\n"
+                + "You entered: \u20b1" + money,
+                "Payment Too Low", JOptionPane.WARNING_MESSAGE);
+            return;
+        }
+
+        try (Connection conn = DriverManager.getConnection(DB_URL, DB_USER, DB_PASSWORD)) {
+
+            PreparedStatement getPst = conn.prepareStatement(
+                "SELECT Address, ContactNumber FROM clientdata WHERE SlotNum = ? AND Name = ?");
+            getPst.setString(1, slotNum);
+            getPst.setString(2, name);
+            ResultSet rs = getPst.executeQuery();
+
+            String customerAddress = "";
+            String customerContact = "";
+            if (rs.next()) {
+                customerAddress = rs.getString("Address")       != null ? rs.getString("Address")       : "";
+                customerContact = rs.getString("ContactNumber") != null ? rs.getString("ContactNumber") : "";
+            } else {
+                JOptionPane.showMessageDialog(this,
+                    "Customer not found! Check Slot # and Name.",
+                    "Not Found", JOptionPane.ERROR_MESSAGE);
+                return;
+            }
+
+            LocalDate today       = LocalDate.now();
+            double    MONTHLY_FEE = minPayment;
+            int       monthsToAdd = (int) (paymentAmount / MONTHLY_FEE);
+            double    excess      = paymentAmount - (monthsToAdd * MONTHLY_FEE);
+
+            if (monthsToAdd < 1) {
+                JOptionPane.showMessageDialog(this,
+                    "Payment of \u20b1" + money
+                    + " does not cover even 1 month (rate: " + planRateDisplay + ").",
+                    "Insufficient Payment", JOptionPane.WARNING_MESSAGE);
+                return;
+            }
+
+            LocalDate newDueDate = today.plusMonths(monthsToAdd);
+
+            String confirmMsg = String.format(
+                "Slot #%s \u2014 %s\n"
+                + "\u2014\u2014\u2014\u2014\u2014\u2014\u2014\u2014\u2014\u2014\u2014\u2014\u2014\u2014\n"
+                + "Amount Paid  : \u20b1%.2f\n"
+                + "Plan Rate    : %s / month\n"
+                + "Months Added : %d month(s)\n"
+                + "New Due Date : %s\n"
+                + "%s\n"
+                + "Proceed?",
+                slotNum, name, paymentAmount, planRateDisplay, monthsToAdd, newDueDate,
+                excess > 0
+                    ? String.format("Excess Credit: \u20b1%.2f (applied to next bill)", excess)
+                    : "");
+
+            int confirm = JOptionPane.showConfirmDialog(this, confirmMsg,
+                "Confirm Payment", JOptionPane.YES_NO_OPTION);
+            if (confirm != JOptionPane.YES_OPTION) return;
+
+            
+            PreparedStatement pstmt = conn.prepareStatement(
+                "UPDATE clientdata SET CashierName=?, Money=?, "
+                + "LastPaymentDate=?, NextDueDate=?, status='active' "
+                + "WHERE SlotNum=? AND Name=?");
+            pstmt.setString(1, cashierName);
+            pstmt.setString(2, money);
+            pstmt.setDate(3, java.sql.Date.valueOf(today));
+            pstmt.setDate(4, java.sql.Date.valueOf(newDueDate));
+            pstmt.setString(5, slotNum);
+            pstmt.setString(6, name);
+            int rowsUpdated = pstmt.executeUpdate();
+
+            if (rowsUpdated > 0) {
+                try {
+                    
+                    PreparedStatement checkPst = conn.prepareStatement(
+                        "SELECT COUNT(*) FROM invoices WHERE slot_num=? "
+                        + "AND LOWER(invoice_status)='unpaid'");
+                    checkPst.setString(1, slotNum);
+                    ResultSet checkRs = checkPst.executeQuery();
+                    checkRs.next();
+
+                    if (checkRs.getInt(1) > 0) {
+                        PreparedStatement updatePst = conn.prepareStatement(
+                            "UPDATE invoices SET invoice_status='Paid', "
+                            + "invoice_amount=?, account_status='active', "
+                            + "invoice_due_date=? "
+                            + "WHERE slot_num=? AND LOWER(invoice_status)='unpaid' "
+                            + "ORDER BY invoice_date ASC LIMIT 1");
+                        updatePst.setDouble(1, MONTHLY_FEE);
+                        updatePst.setDate(2, java.sql.Date.valueOf(newDueDate));
+                        updatePst.setString(3, slotNum);
+                        updatePst.executeUpdate();
+                    } else {
+                        PreparedStatement paidPst = conn.prepareStatement(
+                            "INSERT INTO invoices "
+                            + "(invoice_id, slot_num, invoice_type, invoice_date, invoice_due_date, "
+                            + "invoice_status, invoice_amount, account_status) "
+                            + "VALUES (?, ?, 'Invoice', ?, ?, 'Paid', ?, 'active')");
+                        paidPst.setString(1, "INV-" + System.currentTimeMillis());
+                        paidPst.setString(2, slotNum);
+                        paidPst.setDate(3, java.sql.Date.valueOf(today));
+                        paidPst.setDate(4, java.sql.Date.valueOf(newDueDate));
+                        paidPst.setDouble(5, MONTHLY_FEE);
+                        paidPst.executeUpdate();
+                    }
+
+                    
+                    PreparedStatement deleteStalePst = conn.prepareStatement(
+                        "DELETE FROM invoices WHERE slot_num=? AND LOWER(invoice_status)='unpaid'");
+                    deleteStalePst.setString(1, slotNum);
+                    deleteStalePst.executeUpdate();
+
+                    
+                    Thread.sleep(2);
+                    PreparedStatement nextPst = conn.prepareStatement(
+                        "INSERT INTO invoices "
+                        + "(invoice_id, slot_num, invoice_type, invoice_date, invoice_due_date, "
+                        + "invoice_status, invoice_amount, account_status) "
+                        + "VALUES (?, ?, 'Invoice', ?, NULL, 'Unpaid', ?, 'active')");
+                    nextPst.setString(1, "INV-" + System.currentTimeMillis());
+                    nextPst.setString(2, slotNum);
+                    nextPst.setDate(3, java.sql.Date.valueOf(newDueDate));
+                    nextPst.setDouble(4, MONTHLY_FEE);
+                    nextPst.executeUpdate();
+
+                } catch (Exception invoiceEx) {
+                    System.err.println("Invoice error: " + invoiceEx.getMessage());
+                    invoiceEx.printStackTrace();
+                }
+
+                History.logPayment(slotNum, name, cashierName, money,
+                    "Payment processed: " + monthsToAdd + " month(s) added. "
+                    + "Plan rate: " + planRateDisplay);
+
+                showReceipt(slotNum, name, customerAddress, customerContact,
+                    cashierName, money, today, newDueDate, monthsToAdd, MONTHLY_FEE, excess);
+
+                clearFields();
+
+            } else {
+                JOptionPane.showMessageDialog(this,
+                    "Customer not found! Verify Slot # and Name match exactly.",
+                    "Not Found", JOptionPane.ERROR_MESSAGE);
+            }
+
+        } catch (Exception ex) {
+            JOptionPane.showMessageDialog(this,
+                "Payment Error: " + ex.getMessage(), "Error", JOptionPane.ERROR_MESSAGE);
+            ex.printStackTrace();
+        }
+    }
+
+    private void jButton3ActionPerformed(java.awt.event.ActionEvent evt) {
+        employeelist registerFrame = new employeelist(loggedInCashierName);
+        registerFrame.setLocationRelativeTo(null);
+        registerFrame.setVisible(true);
+        dispose();
+    }
+
+    private void jButton10ActionPerformed(java.awt.event.ActionEvent evt) {
+        try (Connection conn = DriverManager.getConnection(DB_URL, DB_USER, DB_PASSWORD)) {
+
+            PreparedStatement pstmt = conn.prepareStatement(
+                "SELECT SlotNum, status FROM clientdata ORDER BY CAST(SlotNum AS UNSIGNED)");
+            ResultSet rs = pstmt.executeQuery();
+
+            Map<Integer, String> slotStatusMap = new HashMap<>();
+            while (rs.next()) {
+                slotStatusMap.put(
+                    Integer.parseInt(rs.getString("SlotNum")),
+                    rs.getString("status"));
+            }
+
+            long activeCount   = slotStatusMap.values().stream()
+                .filter(s -> "active".equalsIgnoreCase(s)).count();
+            long inactiveCount = slotStatusMap.values().stream()
+                .filter(s -> "inactive".equalsIgnoreCase(s)).count();
+            long emptyCount    = 500 - slotStatusMap.size();
+
+            History.logHistory("CHECK_SLOTS", null, null, currentUser,
+                "SUCCESS", "Slots checked. Active: " + activeCount
+                + ", Inactive: " + inactiveCount + ", Empty: " + emptyCount);
+
+            showSlotSelectionDialog(slotStatusMap, (int) activeCount,
+                (int) inactiveCount, (int) emptyCount);
+
+        } catch (SQLException ex) {
+            JOptionPane.showMessageDialog(this, "Error checking slots: " + ex.getMessage());
+            History.logError("CHECK_SLOTS", currentUser, "Failed: " + ex.getMessage());
+        }
+    }
+
+    private void showSlotSelectionDialog(Map<Integer, String> slotStatusMap,
+                                         int activeCount, int inactiveCount, int emptyCount) {
+
+        javax.swing.JDialog dialog = new javax.swing.JDialog(this, "Slot Availability", true);
+        dialog.setSize(800, 660);
+        dialog.setLocationRelativeTo(this);
+        dialog.setLayout(new java.awt.BorderLayout(5, 5));
+
+        javax.swing.JPanel titlePanel = new javax.swing.JPanel(new java.awt.BorderLayout());
+        titlePanel.setBackground(new java.awt.Color(0, 102, 204));
+        titlePanel.setPreferredSize(new java.awt.Dimension(0, 55));
+        javax.swing.JLabel titleLabel = new javax.swing.JLabel("  SLOT AVAILABILITY");
+        titleLabel.setFont(new java.awt.Font("Segoe UI Black", java.awt.Font.BOLD, 22));
+        titleLabel.setForeground(java.awt.Color.WHITE);
+        titlePanel.add(titleLabel, java.awt.BorderLayout.WEST);
+
+        javax.swing.JPanel legendPanel = new javax.swing.JPanel(
+            new java.awt.FlowLayout(java.awt.FlowLayout.CENTER, 18, 5));
+        legendPanel.setBackground(new java.awt.Color(0, 80, 170));
+        javax.swing.JLabel redBox = new javax.swing.JLabel("  ");
+        redBox.setOpaque(true); redBox.setBackground(new java.awt.Color(210, 50, 50));
+        redBox.setBorder(javax.swing.BorderFactory.createLineBorder(java.awt.Color.WHITE, 1));
+        javax.swing.JLabel redLbl = new javax.swing.JLabel("Inactive (" + inactiveCount + ")");
+        redLbl.setForeground(java.awt.Color.WHITE);
+        redLbl.setFont(new java.awt.Font("Segoe UI", java.awt.Font.BOLD, 13));
+        javax.swing.JLabel greenBox = new javax.swing.JLabel("  ");
+        greenBox.setOpaque(true); greenBox.setBackground(new java.awt.Color(30, 170, 70));
+        greenBox.setBorder(javax.swing.BorderFactory.createLineBorder(java.awt.Color.WHITE, 1));
+        javax.swing.JLabel greenLbl = new javax.swing.JLabel("Active (" + activeCount + ")");
+        greenLbl.setForeground(java.awt.Color.WHITE);
+        greenLbl.setFont(new java.awt.Font("Segoe UI", java.awt.Font.BOLD, 13));
+        javax.swing.JLabel grayBox = new javax.swing.JLabel("  ");
+        grayBox.setOpaque(true); grayBox.setBackground(new java.awt.Color(160, 160, 160));
+        grayBox.setBorder(javax.swing.BorderFactory.createLineBorder(java.awt.Color.WHITE, 1));
+        javax.swing.JLabel grayLbl = new javax.swing.JLabel("Empty (" + emptyCount + ")");
+        grayLbl.setForeground(java.awt.Color.WHITE);
+        grayLbl.setFont(new java.awt.Font("Segoe UI", java.awt.Font.BOLD, 13));
+        legendPanel.add(redBox);   legendPanel.add(redLbl);
+        legendPanel.add(greenBox); legendPanel.add(greenLbl);
+        legendPanel.add(grayBox);  legendPanel.add(grayLbl);
+
+        javax.swing.JPanel searchPanel = new javax.swing.JPanel(
+            new java.awt.FlowLayout(java.awt.FlowLayout.LEFT, 10, 5));
+        searchPanel.setBackground(new java.awt.Color(0, 130, 220));
+        javax.swing.JLabel searchLbl = new javax.swing.JLabel("Search Slot #:");
+        searchLbl.setForeground(java.awt.Color.WHITE);
+        searchLbl.setFont(new java.awt.Font("Segoe UI", java.awt.Font.BOLD, 13));
+        javax.swing.JTextField searchField = new javax.swing.JTextField(10);
+        searchField.setFont(new java.awt.Font("Segoe UI", java.awt.Font.PLAIN, 13));
+        searchPanel.add(searchLbl); searchPanel.add(searchField);
+
+        javax.swing.JPanel topPanel = new javax.swing.JPanel(new java.awt.BorderLayout());
+        topPanel.add(titlePanel,  java.awt.BorderLayout.NORTH);
+        topPanel.add(legendPanel, java.awt.BorderLayout.CENTER);
+        topPanel.add(searchPanel, java.awt.BorderLayout.SOUTH);
+
+        javax.swing.JPanel gridPanel = new javax.swing.JPanel(
+            new java.awt.GridLayout(0, 10, 5, 5));
+        gridPanel.setBackground(new java.awt.Color(0, 120, 200));
+        gridPanel.setBorder(javax.swing.BorderFactory.createEmptyBorder(8, 8, 8, 8));
+
+        Runnable renderSlots = () -> {
+            gridPanel.removeAll();
+            String sf = searchField.getText().trim();
+            for (int slot = 1; slot <= 500; slot++) {
+                if (!sf.isEmpty() && !String.valueOf(slot).contains(sf)) continue;
+                String status = slotStatusMap.get(slot);
+                java.awt.Color bgColor;
+                String statusText;
+                if (status == null) {
+                    bgColor = new java.awt.Color(150, 150, 150); statusText = "Empty";
+                } else if ("inactive".equalsIgnoreCase(status)) {
+                    bgColor = new java.awt.Color(210, 50, 50);   statusText = "Unpaid";
+                } else {
+                    bgColor = new java.awt.Color(30, 170, 70);   statusText = "Active";
+                }
+                javax.swing.JButton btn = new javax.swing.JButton(
+                    "<html><center><b>" + slot + "</b><br><small>"
+                    + statusText + "</small></center></html>");
+                btn.setPreferredSize(new java.awt.Dimension(68, 55));
+                btn.setFont(new java.awt.Font("Segoe UI Black", java.awt.Font.BOLD, 11));
+                btn.setFocusPainted(false);
+                btn.setBackground(bgColor);
+                btn.setForeground(java.awt.Color.WHITE);
+                btn.setBorder(javax.swing.BorderFactory.createLineBorder(
+                    java.awt.Color.WHITE, 2));
+                btn.setOpaque(true);
+                if ("inactive".equalsIgnoreCase(status)) {
+                    final int s = slot;
+                    btn.setCursor(new java.awt.Cursor(java.awt.Cursor.HAND_CURSOR));
+                    btn.addActionListener(e -> {
+                        w1.setText(String.valueOf(s));
+                        fetchNameBySlot();
+                        dialog.dispose();
+                    });
+                    btn.addMouseListener(new java.awt.event.MouseAdapter() {
+                        @Override public void mouseEntered(java.awt.event.MouseEvent e) {
+                            btn.setBackground(new java.awt.Color(255, 80, 80));
+                        }
+                        @Override public void mouseExited(java.awt.event.MouseEvent e) {
+                            btn.setBackground(new java.awt.Color(210, 50, 50));
+                        }
+                    });
+                }
+                gridPanel.add(btn);
+            }
+            gridPanel.revalidate();
+            gridPanel.repaint();
+        };
+
+        searchField.getDocument().addDocumentListener(new javax.swing.event.DocumentListener() {
+            public void insertUpdate(javax.swing.event.DocumentEvent e)  { renderSlots.run(); }
+            public void removeUpdate(javax.swing.event.DocumentEvent e)  { renderSlots.run(); }
+            public void changedUpdate(javax.swing.event.DocumentEvent e) { renderSlots.run(); }
+        });
+
+        renderSlots.run();
+
+        javax.swing.JScrollPane scrollPane = new javax.swing.JScrollPane(gridPanel);
+        scrollPane.setBorder(javax.swing.BorderFactory.createEmptyBorder());
+        scrollPane.getViewport().setBackground(new java.awt.Color(0, 120, 200));
+        scrollPane.setVerticalScrollBarPolicy(javax.swing.JScrollPane.VERTICAL_SCROLLBAR_ALWAYS);
+        scrollPane.setHorizontalScrollBarPolicy(javax.swing.JScrollPane.HORIZONTAL_SCROLLBAR_NEVER);
+        scrollPane.getVerticalScrollBar().setUnitIncrement(16);
+
+        javax.swing.JPanel bottomPanel = new javax.swing.JPanel();
+        bottomPanel.setBackground(new java.awt.Color(0, 102, 204));
+        javax.swing.JButton closeButton = new javax.swing.JButton("CLOSE");
+        closeButton.setFont(new java.awt.Font("Segoe UI Black", java.awt.Font.BOLD, 14));
+        closeButton.setBackground(new java.awt.Color(220, 30, 30));
+        closeButton.setForeground(java.awt.Color.WHITE);
+        closeButton.setPreferredSize(new java.awt.Dimension(120, 38));
+        closeButton.setFocusPainted(false);
+        closeButton.addActionListener(e -> dialog.dispose());
+        bottomPanel.add(closeButton);
+
+        dialog.add(topPanel,    java.awt.BorderLayout.NORTH);
+        dialog.add(scrollPane,  java.awt.BorderLayout.CENTER);
+        dialog.add(bottomPanel, java.awt.BorderLayout.SOUTH);
+        dialog.setVisible(true);
+    }
+
+    private void showInactiveSlotPicker() {
+        List<String[]> inactiveSlots = new ArrayList<>();
+        try (Connection conn = DriverManager.getConnection(DB_URL, DB_USER, DB_PASSWORD)) {
+            PreparedStatement pst = conn.prepareStatement(
+                "SELECT SlotNum, Name FROM clientdata WHERE status = 'inactive' "
+                + "ORDER BY CAST(SlotNum AS UNSIGNED)");
+            ResultSet rs = pst.executeQuery();
+            while (rs.next())
+                inactiveSlots.add(new String[]{rs.getString("SlotNum"), rs.getString("Name")});
+        } catch (Exception ex) {
+            JOptionPane.showMessageDialog(this, "Error loading slots: " + ex.getMessage());
+            return;
+        }
+
+        if (inactiveSlots.isEmpty()) {
+            JOptionPane.showMessageDialog(this,
+                "No inactive slots found. All customers are up to date!",
+                "No Inactive Slots", JOptionPane.INFORMATION_MESSAGE);
+            return;
+        }
+
+        JDialog dialog = new JDialog(this, "Select Inactive Slot", true);
+        dialog.setSize(500, 550);
+        dialog.setLocationRelativeTo(this);
+        dialog.setLayout(new BorderLayout(5, 5));
+
+        JPanel titlePanel = new JPanel(new BorderLayout());
+        titlePanel.setBackground(new Color(180, 30, 30));
+        titlePanel.setPreferredSize(new Dimension(0, 55));
+        javax.swing.JLabel titleLabel = new javax.swing.JLabel(
+            "  INACTIVE SLOTS \u2014 Click a row to select");
+        titleLabel.setFont(new Font("Segoe UI Black", Font.BOLD, 15));
+        titleLabel.setForeground(Color.WHITE);
+        javax.swing.JLabel countLabel = new javax.swing.JLabel(inactiveSlots.size() + " unpaid  ");
+        countLabel.setFont(new Font("Segoe UI", Font.BOLD, 13));
+        countLabel.setForeground(Color.WHITE);
+        countLabel.setHorizontalAlignment(javax.swing.SwingConstants.RIGHT);
+        titlePanel.add(titleLabel, BorderLayout.WEST);
+        titlePanel.add(countLabel, BorderLayout.EAST);
+
+        JPanel searchPanel = new JPanel(new java.awt.FlowLayout(java.awt.FlowLayout.LEFT, 10, 6));
+        searchPanel.setBackground(new Color(200, 50, 50));
+        javax.swing.JLabel searchLbl = new javax.swing.JLabel("Search slot or name:");
+        searchLbl.setForeground(Color.WHITE);
+        searchLbl.setFont(new Font("Segoe UI", Font.BOLD, 13));
+        javax.swing.JTextField searchField = new javax.swing.JTextField(18);
+        searchField.setFont(new Font("Segoe UI", Font.PLAIN, 13));
+        searchPanel.add(searchLbl); searchPanel.add(searchField);
+
+        JPanel topPanel = new JPanel(new BorderLayout());
+        topPanel.add(titlePanel,  BorderLayout.NORTH);
+        topPanel.add(searchPanel, BorderLayout.SOUTH);
+
+        JPanel listPanel = new JPanel();
+        listPanel.setLayout(new javax.swing.BoxLayout(listPanel, javax.swing.BoxLayout.Y_AXIS));
+        listPanel.setBackground(new Color(0, 153, 204));
+
+        Runnable renderList = () -> {
+            listPanel.removeAll();
+            String filter = searchField.getText().trim().toLowerCase();
+            for (String[] slot : inactiveSlots) {
+                String slotNum  = slot[0];
+                String custName = slot[1];
+                if (!filter.isEmpty()
+                        && !slotNum.toLowerCase().contains(filter)
+                        && !custName.toLowerCase().contains(filter)) continue;
+                JPanel row = new JPanel(new BorderLayout(10, 0));
+                row.setBackground(new Color(220, 60, 60));
+                row.setBorder(BorderFactory.createCompoundBorder(
+                    BorderFactory.createMatteBorder(0, 0, 2, 0, Color.WHITE),
+                    BorderFactory.createEmptyBorder(10, 15, 10, 15)));
+                row.setMaximumSize(new Dimension(Integer.MAX_VALUE, 65));
+                row.setCursor(new java.awt.Cursor(java.awt.Cursor.HAND_CURSOR));
+                javax.swing.JLabel slotLabel = new javax.swing.JLabel("Slot #" + slotNum);
+                slotLabel.setFont(new Font("Segoe UI Black", Font.BOLD, 18));
+                slotLabel.setForeground(Color.WHITE);
+                slotLabel.setPreferredSize(new Dimension(120, 40));
+                javax.swing.JLabel nameLabel = new javax.swing.JLabel(custName);
+                nameLabel.setFont(new Font("Segoe UI", Font.BOLD, 16));
+                nameLabel.setForeground(new Color(255, 235, 150));
+                javax.swing.JLabel selectLabel = new javax.swing.JLabel("SELECT");
+                selectLabel.setFont(new Font("Segoe UI Black", Font.BOLD, 12));
+                selectLabel.setForeground(new Color(200, 255, 200));
+                selectLabel.setHorizontalAlignment(javax.swing.SwingConstants.RIGHT);
+                row.add(slotLabel,   BorderLayout.WEST);
+                row.add(nameLabel,   BorderLayout.CENTER);
+                row.add(selectLabel, BorderLayout.EAST);
+                row.addMouseListener(new java.awt.event.MouseAdapter() {
+                    @Override public void mouseClicked(java.awt.event.MouseEvent e) {
+                        w1.setText(slotNum); q1.setText(custName); dialog.dispose();
+                    }
+                    @Override public void mouseEntered(java.awt.event.MouseEvent e) {
+                        row.setBackground(new Color(255, 80, 80));
+                    }
+                    @Override public void mouseExited(java.awt.event.MouseEvent e) {
+                        row.setBackground(new Color(220, 60, 60));
+                    }
+                });
+                listPanel.add(row);
+            }
+            listPanel.revalidate(); listPanel.repaint();
+        };
+
+        searchField.getDocument().addDocumentListener(new javax.swing.event.DocumentListener() {
+            public void insertUpdate(javax.swing.event.DocumentEvent e)  { renderList.run(); }
+            public void removeUpdate(javax.swing.event.DocumentEvent e)  { renderList.run(); }
+            public void changedUpdate(javax.swing.event.DocumentEvent e) { renderList.run(); }
+        });
+        renderList.run();
+
+        JScrollPane scrollPane = new JScrollPane(listPanel);
+        scrollPane.setBorder(BorderFactory.createEmptyBorder());
+        scrollPane.getViewport().setBackground(new Color(0, 153, 204));
+        scrollPane.setVerticalScrollBarPolicy(JScrollPane.VERTICAL_SCROLLBAR_ALWAYS);
+        scrollPane.getVerticalScrollBar().setUnitIncrement(16);
+
+        JPanel bottomPanel = new JPanel();
+        bottomPanel.setBackground(new Color(150, 20, 20));
+        JButton closeBtn = new JButton("CLOSE");
+        closeBtn.setFont(new Font("Segoe UI Black", Font.BOLD, 13));
+        closeBtn.setBackground(new Color(220, 30, 30));
+        closeBtn.setForeground(Color.WHITE);
+        closeBtn.setPreferredSize(new Dimension(120, 38));
+        closeBtn.setFocusPainted(false);
+        closeBtn.addActionListener(e -> dialog.dispose());
+        bottomPanel.add(closeBtn);
+
+        dialog.add(topPanel,    BorderLayout.NORTH);
+        dialog.add(scrollPane,  BorderLayout.CENTER);
+        dialog.add(bottomPanel, BorderLayout.SOUTH);
+        dialog.setVisible(true);
+    }
+
+    
+    private void showReceipt(String slotNum, String name, String address, String contact,
+                             String cashierName, String amount, LocalDate paymentDate,
+                             LocalDate dueDate, int monthsPaid,
+                             double planRate, double excess) {
+
+        JDialog receiptDialog = new JDialog(this, "Payment Receipt", true);
+        receiptDialog.setSize(450, 730);
+        receiptDialog.setLocationRelativeTo(this);
+        receiptDialog.setLayout(new BorderLayout(10, 10));
+
+        JPanel titlePanel = new JPanel();
+        titlePanel.setBackground(new Color(0, 153, 255));
+        titlePanel.setPreferredSize(new Dimension(0, 60));
+        javax.swing.JLabel titleLabel = new javax.swing.JLabel("PAYMENT RECEIPT");
+        titleLabel.setFont(new Font("Segoe UI Black", Font.BOLD, 24));
+        titleLabel.setForeground(Color.WHITE);
+        titlePanel.add(titleLabel);
+
+        JTextArea receiptText = new JTextArea();
+        receiptText.setEditable(false);
+        receiptText.setFont(new Font("Monospaced", Font.PLAIN, 12));
+        receiptText.setMargin(new java.awt.Insets(15, 15, 15, 15));
+
+        LocalDateTime now = LocalDateTime.now();
+        DateTimeFormatter dateFmt = DateTimeFormatter.ofPattern("yyyy-MM-dd");
+        DateTimeFormatter timeFmt = DateTimeFormatter.ofPattern("HH:mm:ss");
+
+        String planRateStr = planRate % 1 == 0
+            ? "\u20b1" + (int) planRate
+            : String.format("\u20b1%.2f", planRate);
+
+        StringBuilder receipt = new StringBuilder();
+        receipt.append("========================================\n");
+        receipt.append("         PIPOL BROADBAND\n");
+        receipt.append("         PAYMENT RECEIPT\n");
+        receipt.append("========================================\n\n");
+        receipt.append("Date    : ").append(now.format(dateFmt)).append("\n");
+        receipt.append("Time    : ").append(now.format(timeFmt)).append("\n");
+        receipt.append("Receipt#: ").append(generateReceiptNumber()).append("\n");
+        receipt.append("----------------------------------------\n\n");
+        receipt.append("CUSTOMER INFORMATION\n");
+        receipt.append("----------------------------------------\n");
+        receipt.append("Slot #   : ").append(slotNum).append("\n");
+        receipt.append("Name     : ").append(name).append("\n");
+        receipt.append("Address  : ").append(address).append("\n");
+        receipt.append("Contact  : ").append(contact).append("\n\n");
+        receipt.append("PAYMENT DETAILS\n");
+        receipt.append("----------------------------------------\n");
+        receipt.append("Amount Paid  : \u20b1")
+               .append(String.format("%.2f", Double.parseDouble(amount))).append("\n");
+        receipt.append("Plan Rate    : ").append(planRateStr).append(" / month\n");
+        receipt.append("Months Paid  : ").append(monthsPaid).append(" month(s)\n");
+        if (excess > 0)
+            receipt.append(String.format("Excess Credit: \u20b1%.2f\n", excess));
+        receipt.append("Payment Date : ").append(paymentDate.format(dateFmt)).append("\n");
+        receipt.append("Next Due Date: ").append(dueDate.format(dateFmt)).append("\n");
+        receipt.append("Status       : ACTIVE\n\n");
+        receipt.append("----------------------------------------\n");
+        receipt.append("Cashier      : ").append(cashierName).append("\n");
+        receipt.append("----------------------------------------\n\n");
+        receipt.append("  Thank you for your payment!\n");
+        receipt.append("  For inquiries, please contact us.\n\n");
+        receipt.append("========================================\n");
+        receipt.append("      This is an official receipt\n");
+        receipt.append("========================================\n");
+
+        receiptText.setText(receipt.toString());
+
+        JScrollPane scrollPane = new JScrollPane(receiptText);
+        scrollPane.setBorder(BorderFactory.createEmptyBorder(10, 10, 10, 10));
+
+        JPanel buttonPanel = new JPanel();
+        buttonPanel.setBackground(new Color(0, 153, 204));
+        buttonPanel.setPreferredSize(new Dimension(0, 80));
+        buttonPanel.setBorder(BorderFactory.createEmptyBorder(10, 20, 10, 20));
+
+        JButton printButton = new JButton("PRINT RECEIPT");
+        printButton.setFont(new Font("Segoe UI Black", Font.BOLD, 14));
+        printButton.setBackground(new Color(0, 204, 102));
+        printButton.setForeground(Color.WHITE);
+        printButton.setPreferredSize(new Dimension(180, 50));
+        printButton.addActionListener(e -> printReceipt(receiptText.getText()));
+
+        JButton closeButton = new JButton("CLOSE");
+        closeButton.setFont(new Font("Segoe UI Black", Font.BOLD, 14));
+        closeButton.setBackground(new Color(255, 51, 51));
+        closeButton.setForeground(Color.WHITE);
+        closeButton.setPreferredSize(new Dimension(120, 50));
+        closeButton.addActionListener(e -> receiptDialog.dispose());
+
+        buttonPanel.add(printButton);
+        buttonPanel.add(javax.swing.Box.createHorizontalStrut(10));
+        buttonPanel.add(closeButton);
+
+        receiptDialog.add(titlePanel,  BorderLayout.NORTH);
+        receiptDialog.add(scrollPane,  BorderLayout.CENTER);
+        receiptDialog.add(buttonPanel, BorderLayout.SOUTH);
+        receiptDialog.setVisible(true);
+    }
+
+    private String generateReceiptNumber() {
+        return "RC-" + LocalDateTime.now()
+            .format(DateTimeFormatter.ofPattern("yyyyMMddHHmmss"));
+    }
+
+    private void printReceipt(String receiptContent) {
+        PrinterJob printerJob = PrinterJob.getPrinterJob();
+        printerJob.setPrintable((graphics, pageFormat, pageIndex) -> {
+            if (pageIndex > 0) return Printable.NO_SUCH_PAGE;
+            Graphics2D g2d = (Graphics2D) graphics;
+            g2d.translate(pageFormat.getImageableX(), pageFormat.getImageableY());
+            g2d.setFont(new Font("Monospaced", Font.PLAIN, 9));
+            g2d.setColor(Color.BLACK);
+            String[] lines = receiptContent.split("\n");
+            int y = 20;
+            for (String line : lines) { g2d.drawString(line, 10, y); y += 12; }
+            return Printable.PAGE_EXISTS;
+        });
+        if (printerJob.printDialog()) {
+            try {
+                printerJob.print();
+                JOptionPane.showMessageDialog(this, "Receipt sent to printer successfully!");
+                History.logHistory("PRINT_RECEIPT", w1.getText(), q1.getText(), q2.getText(),
+                    "SUCCESS", "Receipt printed for payment of \u20b1" + q.getText());
+            } catch (PrinterException ex) {
+                JOptionPane.showMessageDialog(this, "Print Error: " + ex.getMessage());
+                History.logError("PRINT_RECEIPT", q2.getText(), "Print failed: " + ex.getMessage());
+            }
+        }
+    }
+
+    private void clearFields() {
+        w1.setText("");
+        q1.setText("");
+        q.setText("");
+        q2.setText(currentUser);
+    }
+
+    public static void main(String args[]) {
+        try {
+            for (javax.swing.UIManager.LookAndFeelInfo info : javax.swing.UIManager.getInstalledLookAndFeels()) {
+                if ("Nimbus".equals(info.getName())) {
+                    javax.swing.UIManager.setLookAndFeel(info.getClassName());
+                    break;
+                }
+            }
+        } catch (ReflectiveOperationException | javax.swing.UnsupportedLookAndFeelException ex) {
+            logger.log(java.util.logging.Level.SEVERE, null, ex);
+        }
+
+        java.awt.EventQueue.invokeLater(() -> new employeepayment().setVisible(true));
+    }
+
+    
+    private javax.swing.JLabel contact;
+    private javax.swing.JLabel costumer;
+    private javax.swing.JLabel costumer1;
+    private javax.swing.JLabel costumer2;
+    private javax.swing.JButton jButton1;
+    private javax.swing.JButton jButton10;
+    private javax.swing.JButton jButton2;
+    private javax.swing.JButton jButton3;
+    private javax.swing.JButton jButton7;
+    private javax.swing.JLabel jLabel1;
+    private javax.swing.JLabel jLabel7;
+    private javax.swing.JPanel jPanel1;
+    private javax.swing.JPanel jPanel2;
+    private javax.swing.JTextField q;   
+    private javax.swing.JTextField q1;  
+    private javax.swing.JTextField q2;  
+    private javax.swing.JTextField q3;  
+    private javax.swing.JTextField w1;  
+    
+}
