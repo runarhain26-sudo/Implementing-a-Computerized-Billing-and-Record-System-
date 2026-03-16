@@ -1,0 +1,2204 @@
+package newpackage;
+
+import java.nio.file.Files;
+import java.awt.BorderLayout;
+import java.awt.Color;
+import java.awt.Component;
+import java.awt.Cursor;
+import java.awt.Dimension;
+import java.awt.Font;
+import java.awt.GridLayout;
+import java.awt.Image;
+import java.io.ByteArrayInputStream;
+import java.sql.Connection;
+import java.sql.Date;
+import java.sql.DriverManager;
+import java.sql.PreparedStatement;
+import java.sql.ResultSet;
+import java.time.LocalDate;
+import java.time.format.DateTimeFormatter;
+import java.util.ArrayList;
+import java.util.List;
+import javax.imageio.ImageIO;
+import javax.swing.BorderFactory;
+import javax.swing.Box;
+import javax.swing.ImageIcon;
+import javax.swing.JButton;
+import javax.swing.JDialog;
+import javax.swing.JLabel;
+import javax.swing.JOptionPane;
+import javax.swing.JPanel;
+import javax.swing.JScrollPane;
+import javax.swing.JTable;
+import javax.swing.JTextField;
+import javax.swing.RowFilter;
+import javax.swing.table.DefaultTableCellRenderer;
+import javax.swing.RowSorter;
+import javax.swing.table.DefaultTableModel;
+import javax.swing.table.TableRowSorter;
+import java.awt.Graphics2D;
+import java.awt.Color;
+import java.awt.Component;
+import java.time.LocalDate;
+import java.time.format.DateTimeFormatter;
+import javax.swing.JTable;
+import javax.swing.table.DefaultTableCellRenderer;
+
+
+
+/**
+ * @author rhain
+ * 
+ */
+public class adminlist extends javax.swing.JFrame {
+
+    private static final java.util.logging.Logger logger = java.util.logging.Logger.getLogger(adminlist.class.getName());
+    private TableRowSorter<DefaultTableModel> sorter;
+
+    private static final String DB_URL      = "jdbc:mysql://localhost:3306/dbregister?zeroDateTimeBehavior=CONVERT_TO_NULL";
+    private static final String DB_USER     = "root";
+    private static final String DB_PASSWORD = "";
+
+    private String currentUser = "Admin";
+
+
+public adminlist() {
+    initComponents();
+    updateOverdueCustomers();
+    generateMissingInvoices();   
+    loadTableData();
+    addTableClickListener();
+    setupTableColors();
+    debugCustomerStatus();
+    jTable1.getColumnModel().getColumn(4).setHeaderValue("Next Due Date");
+    jTable1.getTableHeader().repaint();
+}
+private void debugCustomerStatus() {
+    try (Connection conn = DriverManager.getConnection(DB_URL, DB_USER, DB_PASSWORD)) {
+      
+        ResultSet rs = conn.prepareStatement(
+            "SELECT c.SlotNum, c.status, c.NextDueDate, c.LastPaymentDate, " +
+            "  (SELECT MAX(invoice_due_date) FROM invoices i " +
+            "   WHERE i.slot_num = c.SlotNum AND LOWER(i.invoice_status) = 'paid') AS last_paid_due " +
+            "FROM clientdata c WHERE c.SlotNum IN ('2','23','24','25') "
+        ).executeQuery();
+        while (rs.next()) {
+            System.out.println("Slot: " + rs.getString("SlotNum") +
+                " | Status: " + rs.getString("status") +
+                " | NextDue: " + rs.getString("NextDueDate") +
+                " | LastPay: " + rs.getString("LastPaymentDate") +
+                " | LastPaidInvoiceDue: " + rs.getString("last_paid_due"));
+        }
+    } catch (Exception ex) { ex.printStackTrace(); }
+}
+public adminlist(String username) {
+    this.currentUser = username;
+    initComponents();
+    updateOverdueCustomers();
+    generateMissingInvoices();   
+    loadTableData();
+    addTableClickListener();
+    setupTableColors();
+    jTable1.getColumnModel().getColumn(4).setHeaderValue("Next Due Date");
+    jTable1.getTableHeader().repaint();
+}
+
+    
+
+private void updateOverdueCustomers() {
+    try (Connection conn = DriverManager.getConnection(DB_URL, DB_USER, DB_PASSWORD)) {
+
+       
+
+        
+        conn.prepareStatement(
+            "UPDATE invoices i " +
+            "JOIN clientdata c ON c.SlotNum = i.slot_num " +
+            "SET i.account_status = c.status " +
+            "WHERE LOWER(i.invoice_status) = 'unpaid' " +
+            "AND i.invoice_due_date IS NOT NULL " +
+            "AND i.invoice_due_date <= CURDATE()"
+        ).executeUpdate();
+
+    } catch (Exception ex) {
+        System.err.println("Error updating overdue customers: " + ex.getMessage());
+    }
+}
+    
+
+ private void generateMissingInvoices() {
+    try (Connection conn = DriverManager.getConnection(DB_URL, DB_USER, DB_PASSWORD)) {
+
+     
+        String fixSql = "UPDATE invoices i " +
+                "JOIN clientdata c ON c.SlotNum = i.slot_num " +
+                "SET i.invoice_due_date = DATE_ADD(c.NextDueDate, INTERVAL 1 MONTH), " +
+                "    i.invoice_date = c.NextDueDate " +
+                "WHERE LOWER(i.invoice_status) = 'unpaid' " +
+                "AND i.invoice_due_date IS NULL " +
+                "AND c.NextDueDate IS NOT NULL " +
+                "AND EXISTS (" +
+                "  SELECT 1 FROM invoices i2 WHERE i2.slot_num = i.slot_num " +
+                "  AND LOWER(i2.invoice_status) = 'unpaid' AND i2.invoice_due_date IS NOT NULL" +
+                ")";
+        conn.prepareStatement(fixSql).executeUpdate();
+
+        
+        String chainSql = "SELECT c.SlotNum, c.status, " +
+                          "  MAX(i.invoice_due_date) AS last_unpaid_due, " +
+                          "  MAX(i.invoice_amount) AS last_amount " +
+                          "FROM clientdata c " +
+                          "JOIN invoices i ON i.slot_num = c.SlotNum " +
+                          "  AND LOWER(i.invoice_status) = 'unpaid' " +
+                          "  AND i.invoice_due_date IS NOT NULL " +
+                          "  AND i.invoice_due_date < CURDATE() " +
+                          "WHERE c.status = 'inactive' " +
+                          "AND c.LastPaymentDate IS NOT NULL " +
+                          "AND NOT EXISTS (" +
+                          "  SELECT 1 FROM invoices nx " +
+                          "  WHERE nx.slot_num = c.SlotNum " +
+                          "  AND LOWER(nx.invoice_status) = 'unpaid' " +
+                          "  AND nx.invoice_due_date >= CURDATE()" +
+                          ") " +
+                          "GROUP BY c.SlotNum, c.status";
+
+        PreparedStatement chainPst = conn.prepareStatement(chainSql);
+        ResultSet chainRs = chainPst.executeQuery();
+
+        while (chainRs.next()) {
+            String slotNum      = chainRs.getString("SlotNum");
+            String acctStatus   = chainRs.getString("status");
+            LocalDate lastUnpaidDue = chainRs.getDate("last_unpaid_due").toLocalDate();
+
+            double amount = 699.00;
+            PreparedStatement planPs = conn.prepareStatement(
+                "SELECT COALESCE(NULLIF(PlanRate, 0), 699.00) AS rate FROM clientdata WHERE SlotNum = ?");
+            planPs.setString(1, slotNum);
+            ResultSet planRs = planPs.executeQuery();
+            if (planRs.next()) amount = planRs.getDouble("rate");
+
+            LocalDate newBillDate = lastUnpaidDue;
+            LocalDate newDueDate  = lastUnpaidDue.plusMonths(1);
+            insertInvoice(conn, slotNum, newBillDate, newDueDate, "Unpaid", acctStatus, amount);
+        }
+
+        
+        String firstSql = "SELECT c.SlotNum, c.NextDueDate, c.status " +
+                          "FROM clientdata c " +
+                          "WHERE c.LastPaymentDate IS NOT NULL " +
+                          "AND c.NextDueDate IS NOT NULL " +
+                          "AND c.NextDueDate < CURDATE() " +
+                          "AND c.status = 'inactive' " +
+                          "AND NOT EXISTS (" +
+                          "  SELECT 1 FROM invoices i " +
+                          "  WHERE i.slot_num = c.SlotNum " +
+                          "  AND LOWER(i.invoice_status) = 'unpaid'" +
+                          ") " +
+                          "AND NOT EXISTS (" +
+                          "  SELECT 1 FROM invoices i " +
+                          "  WHERE i.slot_num = c.SlotNum " +
+                          "  AND LOWER(i.invoice_status) = 'paid'" +
+                          "  AND i.invoice_date = CURDATE()" +
+                          ") " +
+                          "AND EXISTS (" +
+                          "  SELECT 1 FROM invoices i " +
+                          "  WHERE i.slot_num = c.SlotNum " +
+                          "  AND LOWER(i.invoice_status) = 'paid'" +
+                          ")";
+
+        PreparedStatement firstPst = conn.prepareStatement(firstSql);
+        ResultSet firstRs = firstPst.executeQuery();
+
+        while (firstRs.next()) {
+            String slotNum    = firstRs.getString("SlotNum");
+            String acctStatus = firstRs.getString("status");
+
+            double amount = 699.00;
+            PreparedStatement feePs = conn.prepareStatement(
+                "SELECT COALESCE(NULLIF(PlanRate, 0), 699.00) AS rate FROM clientdata WHERE SlotNum = ?");
+            feePs.setString(1, slotNum);
+            ResultSet feeRs = feePs.executeQuery();
+            if (feeRs.next()) amount = feeRs.getDouble("rate");
+
+            insertInvoice(conn, slotNum, null, null, "Unpaid", acctStatus, amount);
+        }
+
+    } catch (Exception ex) {
+        System.err.println("Error generating invoices: " + ex.getMessage());
+    }
+}
+
+  private void insertInvoice(Connection conn, String slotNum,
+    LocalDate billDate, LocalDate dueDate,
+    String invoiceStatus, String accountStatus, double amount) throws Exception {
+
+    
+    if (dueDate != null) {
+        PreparedStatement checkPs = conn.prepareStatement(
+            "SELECT COUNT(*) FROM invoices WHERE slot_num = ? " +
+            "AND LOWER(invoice_status) = 'unpaid' " +
+            "AND invoice_due_date = ?");
+        checkPs.setString(1, slotNum);
+        checkPs.setDate(2, java.sql.Date.valueOf(dueDate));
+        ResultSet checkRs = checkPs.executeQuery();
+        if (checkRs.next() && checkRs.getInt(1) > 0) return;
+    } else {
+
+        PreparedStatement checkPs = conn.prepareStatement(
+            "SELECT COUNT(*) FROM invoices WHERE slot_num = ? " +
+            "AND LOWER(invoice_status) = 'unpaid' " +
+            "AND invoice_due_date IS NULL");
+        checkPs.setString(1, slotNum);
+        ResultSet checkRs = checkPs.executeQuery();
+        if (checkRs.next() && checkRs.getInt(1) > 0) return;
+    }
+
+    String invoiceId = "INV-" + java.util.UUID.randomUUID().toString();
+    String sql = "INSERT INTO invoices " +
+        "(invoice_id, slot_num, invoice_type, invoice_date, invoice_due_date, " +
+        "invoice_status, invoice_amount, account_status) " +
+        "VALUES (?, ?, 'Invoice', ?, ?, ?, ?, ?)";
+
+    PreparedStatement pst = conn.prepareStatement(sql);
+    pst.setString(1, invoiceId);
+    pst.setString(2, slotNum);
+
+    if (billDate != null) pst.setDate(3, java.sql.Date.valueOf(billDate));
+    else pst.setNull(3, java.sql.Types.DATE);
+
+    if (dueDate != null) pst.setDate(4, java.sql.Date.valueOf(dueDate));
+    else pst.setNull(4, java.sql.Types.DATE);
+    pst.setString(5, invoiceStatus);
+    pst.setDouble(6, amount);
+    pst.setString(7, accountStatus);
+    pst.executeUpdate();
+
+    Thread.sleep(1);
+}
+  
+public static void createFirstInvoiceForNewCustomer(String slotNum, LocalDate regDate, double monthlyFee) {
+}
+
+  private void setupTableColors() {
+    jTable1.setDefaultRenderer(Object.class, new DefaultTableCellRenderer() {
+        @Override
+      public Component getTableCellRendererComponent(JTable table, Object value,
+                boolean isSelected, boolean hasFocus, int row, int column) {
+            Component c = super.getTableCellRendererComponent(table, value, isSelected, hasFocus, row, column);
+            int modelRow = table.convertRowIndexToModel(row);
+            DefaultTableModel model = (DefaultTableModel) table.getModel();
+            Object statusObj = model.getValueAt(modelRow, 5);
+
+            if (isSelected) {
+                c.setBackground(table.getSelectionBackground());
+                c.setForeground(table.getSelectionForeground());
+                return c;
+            }
+
+            String status = statusObj != null ? statusObj.toString() : "";
+
+            if ("inactive".equalsIgnoreCase(status)) {
+                c.setBackground(new Color(255, 200, 200));
+                c.setForeground(new Color(139, 0, 0));
+            } else {
+                c.setBackground(Color.WHITE);
+                c.setForeground(Color.BLACK);
+            }
+
+            return c;
+        }
+    });
+}
+
+
+    private void addTableClickListener() {
+        jTable1.addMouseListener(new java.awt.event.MouseAdapter() {
+            @Override
+            public void mouseClicked(java.awt.event.MouseEvent evt) {
+                if (evt.getClickCount() == 2) {
+                    int selectedRow = jTable1.getSelectedRow();
+                    if (selectedRow != -1) {
+                        int modelRow = jTable1.convertRowIndexToModel(selectedRow);
+                        DefaultTableModel model = (DefaultTableModel) jTable1.getModel();
+                        String slotNum      = model.getValueAt(modelRow, 0).toString();
+                        String customerName = model.getValueAt(modelRow, 1).toString();
+                        History.logHistory("VIEW", slotNum, customerName, currentUser, "SUCCESS",
+                            "Viewed customer details via double-click");
+                        showCustomerDetails(slotNum);
+                    }
+                }
+            }
+        });
+    }
+
+
+    private void showFullScreenImage(java.awt.image.BufferedImage image, String title) {
+        JDialog imageDialog = new JDialog(this, title, true);
+        imageDialog.setDefaultCloseOperation(JDialog.DISPOSE_ON_CLOSE);
+        imageDialog.setSize(800, 600);
+        imageDialog.setLocationRelativeTo(this);
+
+        JLabel imageLabel = new JLabel(new ImageIcon(image));
+        imageLabel.setHorizontalAlignment(JLabel.CENTER);
+        imageLabel.setVerticalAlignment(JLabel.CENTER);
+
+        JPanel closePanel = new JPanel();
+        closePanel.setBackground(new Color(50, 50, 50));
+        JButton closeBtn = new JButton("CLOSE");
+        closeBtn.setBackground(new Color(100, 100, 100));
+        closeBtn.setForeground(Color.WHITE);
+        closeBtn.setFont(new Font("Segoe UI Black", Font.BOLD, 12));
+        closeBtn.addActionListener(e -> imageDialog.dispose());
+        closePanel.add(closeBtn);
+
+        imageDialog.add(new JScrollPane(imageLabel), BorderLayout.CENTER);
+        imageDialog.add(closePanel, BorderLayout.SOUTH);
+        imageDialog.setVisible(true);
+    }
+
+
+   private void showProfessionalSOA(String slotNum, String customerName, String customerContact) {
+
+      String currentStatus = "Unknown", nextDue = "N/A", lastPay = "N/A",
+       address = "N/A", regDate = "N/A", planRate = "N/A";
+
+        try (Connection conn = DriverManager.getConnection(DB_URL, DB_USER, DB_PASSWORD)) {
+           PreparedStatement ps = conn.prepareStatement(
+    "SELECT status, NextDueDate, LastPaymentDate, Address, DateOfRegister, PlanRate " +
+    "FROM clientdata WHERE SlotNum = ?");
+           ps.setString(1, slotNum);
+            ResultSet rs = ps.executeQuery();
+            if (rs.next()) {
+                currentStatus = rs.getString("status")          != null ? rs.getString("status")          : "Unknown";
+                nextDue       = rs.getString("NextDueDate")     != null ? rs.getString("NextDueDate")     : "N/A";
+                lastPay       = rs.getString("LastPaymentDate") != null ? rs.getString("LastPaymentDate") : "N/A";
+                address       = rs.getString("Address")         != null ? rs.getString("Address")         : "N/A";
+               regDate   = rs.getString("DateOfRegister") != null ? rs.getString("DateOfRegister") : "N/A";
+               planRate  = rs.getString("PlanRate")       != null ? "₱" + rs.getString("PlanRate") : "N/A";
+            }
+
+            
+            if ("N/A".equals(lastPay)) {
+                PreparedStatement ps2 = conn.prepareStatement(
+                    "SELECT MAX(invoice_date) AS last_paid FROM invoices " +
+                    "WHERE slot_num = ? AND LOWER(invoice_status) = 'paid'");
+                ps2.setString(1, slotNum);
+                ResultSet rs2 = ps2.executeQuery();
+                if (rs2.next() && rs2.getString("last_paid") != null) {
+                    lastPay = rs2.getString("last_paid");
+                    
+                    PreparedStatement syncPs = conn.prepareStatement(
+                        "UPDATE clientdata SET LastPaymentDate = ? WHERE SlotNum = ? AND LastPaymentDate IS NULL");
+                    syncPs.setString(1, lastPay);
+                    syncPs.setString(2, slotNum);
+                    syncPs.executeUpdate();
+                }
+            }
+
+            
+            if ("N/A".equals(nextDue)) {
+                PreparedStatement ps3 = conn.prepareStatement(
+                    "SELECT invoice_due_date FROM invoices " +
+                    "WHERE slot_num = ? AND LOWER(invoice_status) = 'paid' " +
+                    "AND invoice_due_date IS NOT NULL " +
+                    "ORDER BY invoice_date DESC LIMIT 1");
+                ps3.setString(1, slotNum);
+                ResultSet rs3 = ps3.executeQuery();
+                if (rs3.next() && rs3.getString("invoice_due_date") != null) {
+                    nextDue = rs3.getString("invoice_due_date");
+                }
+            }
+
+        } catch (Exception ignored) {}   
+
+        boolean isActive = "active".equalsIgnoreCase(currentStatus);
+
+        
+        DefaultTableModel invoiceModel = new DefaultTableModel(
+            new String[]{"Invoice #", "Type", "Bill Date", "Due Date", "Acct Status", "Payment Status", "Amount"}, 0
+        ) { @Override public boolean isCellEditable(int r, int c) { return false; } };
+
+        double totalBilled = 0, totalPaid = 0, totalUnpaid = 0;
+        int invoiceCount = 0;
+
+        try (Connection conn = DriverManager.getConnection(DB_URL, DB_USER, DB_PASSWORD)) {
+            
+         PreparedStatement pst = conn.prepareStatement(
+    "SELECT i.invoice_id, i.invoice_type, i.invoice_date, " +
+    "i.invoice_due_date, i.invoice_status, i.invoice_amount, " +
+    "CASE " +
+    "  WHEN LOWER(i.invoice_status) = 'paid' THEN 'active' " +
+    "  WHEN i.invoice_due_date IS NULL AND LOWER(i.invoice_status) = 'unpaid' THEN c.status " +
+    "  WHEN i.invoice_due_date > CURDATE() " +
+    "    AND EXISTS (" +
+    "      SELECT 1 FROM invoices p WHERE p.slot_num = i.slot_num " +
+    "      AND LOWER(p.invoice_status) = 'paid'" +
+    "    ) THEN 'active' " +
+    "  ELSE c.status " +
+    "END AS acct_status " +
+    "FROM invoices i LEFT JOIN clientdata c ON c.SlotNum = i.slot_num " +
+    "WHERE i.slot_num = ? ORDER BY i.invoice_date DESC");
+pst.setString(1, slotNum);
+                       ResultSet rs = pst.executeQuery();
+  while (rs.next()) {
+    double amt   = rs.getDouble("invoice_amount");
+    String invSt = rs.getString("invoice_status");
+    String due   = rs.getString("invoice_due_date");
+    String bill  = rs.getString("invoice_date");
+    String acctSt = rs.getString("acct_status");
+
+
+    boolean isFuturePlaceholder = "Unpaid".equalsIgnoreCase(invSt) 
+                                   && (due == null || due.equals("null"));
+    if (isFuturePlaceholder) {
+        invoiceCount++; 
+        continue;       
+    }
+
+    invoiceModel.addRow(new Object[]{
+        rs.getString("invoice_id"),
+        rs.getString("invoice_type"),
+        bill,
+        due,
+        acctSt != null ? acctSt : "-",
+        invSt,
+        String.format("%.2f", amt)
+    });
+
+    totalBilled += amt;
+    if ("Paid".equalsIgnoreCase(invSt)) totalPaid   += amt;
+    else                                totalUnpaid += amt;
+    invoiceCount++;
+}
+        } catch (Exception ex) {
+            System.err.println("Error loading invoices: " + ex.getMessage());
+        }
+
+        
+    JDialog soaDialog = new JDialog(this, "Statement of Accounts - Slot #" + slotNum, true);
+soaDialog.setLayout(new BorderLayout());
+soaDialog.getContentPane().setBackground(Color.WHITE);
+
+
+java.awt.Insets screenInsets = java.awt.Toolkit.getDefaultToolkit()
+    .getScreenInsets(java.awt.GraphicsEnvironment
+    .getLocalGraphicsEnvironment()
+    .getDefaultScreenDevice()
+    .getDefaultConfiguration());
+java.awt.Dimension screenSize = java.awt.Toolkit.getDefaultToolkit().getScreenSize();
+int availableWidth  = screenSize.width  - screenInsets.left - screenInsets.right;
+int availableHeight = screenSize.height - screenInsets.top  - screenInsets.bottom;
+
+soaDialog.setSize(availableWidth, availableHeight);
+soaDialog.setLocation(screenInsets.left, screenInsets.top);
+        
+        JPanel headerPanel = new JPanel(new BorderLayout());
+        headerPanel.setBackground(new Color(0, 102, 204));
+        headerPanel.setPreferredSize(new Dimension(0, 90));
+        headerPanel.setBorder(BorderFactory.createEmptyBorder(10, 20, 10, 20));
+
+        JPanel leftHeader = new JPanel();
+        leftHeader.setLayout(new javax.swing.BoxLayout(leftHeader, javax.swing.BoxLayout.Y_AXIS));
+        leftHeader.setBackground(new Color(0, 102, 204));
+        JLabel companyLbl = new JLabel("PIPOL BROADBAND");
+        companyLbl.setFont(new Font("Segoe UI Black", Font.BOLD, 26));
+        companyLbl.setForeground(Color.WHITE);
+        JLabel soaLbl = new JLabel("STATEMENT OF ACCOUNTS");
+        soaLbl.setFont(new Font("Segoe UI", Font.PLAIN, 13));
+        soaLbl.setForeground(new Color(200, 230, 255));
+        leftHeader.add(companyLbl);
+        leftHeader.add(soaLbl);
+
+        JPanel rightHeader = new JPanel();
+        rightHeader.setLayout(new javax.swing.BoxLayout(rightHeader, javax.swing.BoxLayout.Y_AXIS));
+        rightHeader.setBackground(new Color(0, 102, 204));
+        JLabel dateLbl = new JLabel("Date Printed: " +
+            java.time.LocalDate.now().format(DateTimeFormatter.ofPattern("MMMM dd, yyyy")));
+        dateLbl.setFont(new Font("Segoe UI", Font.PLAIN, 12));
+        dateLbl.setForeground(Color.WHITE);
+        dateLbl.setAlignmentX(Component.RIGHT_ALIGNMENT);
+        JLabel slotLbl = new JLabel("Slot #: " + slotNum);
+        slotLbl.setFont(new Font("Segoe UI", Font.BOLD, 13));
+        slotLbl.setForeground(Color.WHITE);
+        slotLbl.setAlignmentX(Component.RIGHT_ALIGNMENT);
+        rightHeader.add(dateLbl);
+        rightHeader.add(Box.createVerticalStrut(4));
+        rightHeader.add(slotLbl);
+
+        headerPanel.add(leftHeader,  BorderLayout.WEST);
+        headerPanel.add(rightHeader, BorderLayout.EAST);
+
+        
+JPanel infoStrip = new JPanel(new java.awt.GridLayout(1, 5, 0, 0));
+        infoStrip.setBackground(new Color(240, 245, 255));
+        infoStrip.setBorder(BorderFactory.createCompoundBorder(
+            BorderFactory.createMatteBorder(0, 0, 2, 0, new Color(0, 102, 204)),
+            BorderFactory.createEmptyBorder(10, 20, 10, 20)
+        ));
+       infoStrip.add(makeInfoBlock("Customer Name",   customerName));
+infoStrip.add(makeInfoBlock("Contact Number",  customerContact));
+infoStrip.add(makeInfoBlock("Address",         address));
+infoStrip.add(makeInfoBlock("Registered Date", regDate));
+infoStrip.add(makeInfoBlock("Plan Rate",       planRate));
+
+        
+        JPanel statusBar = new JPanel(new java.awt.FlowLayout(java.awt.FlowLayout.LEFT, 20, 8));
+        statusBar.setBackground(isActive ? new Color(230, 255, 230) : new Color(255, 230, 230));
+        statusBar.setBorder(BorderFactory.createMatteBorder(0, 0, 1, 0, Color.LIGHT_GRAY));
+
+        JLabel statusBadge = new JLabel("  ● Account Status: " + currentStatus.toUpperCase() + "  ");
+        statusBadge.setFont(new Font("Segoe UI Black", Font.BOLD, 13));
+        statusBadge.setOpaque(true);
+        statusBadge.setBackground(isActive ? new Color(0, 180, 0) : new Color(200, 0, 0));
+        statusBadge.setForeground(Color.WHITE);
+        statusBadge.setBorder(BorderFactory.createEmptyBorder(4, 8, 4, 8));
+
+        JLabel lastPayLbl = new JLabel("Last Payment: " + lastPay);
+        lastPayLbl.setFont(new Font("Segoe UI", Font.PLAIN, 12));
+        lastPayLbl.setForeground(new Color(60, 60, 60));
+
+        JLabel nextDueLbl = new JLabel("Next Due: " + nextDue);
+        nextDueLbl.setFont(new Font("Segoe UI", Font.BOLD, 12));
+        nextDueLbl.setForeground(isActive ? new Color(0, 130, 0) : new Color(180, 0, 0));
+
+        statusBar.add(statusBadge);
+        statusBar.add(lastPayLbl);
+        statusBar.add(nextDueLbl);
+
+        
+        JPanel northComposite = new JPanel(new BorderLayout());
+        northComposite.add(headerPanel, BorderLayout.NORTH);
+        northComposite.add(infoStrip,   BorderLayout.CENTER);
+        northComposite.add(statusBar,   BorderLayout.SOUTH);
+
+        
+        JTable invoiceTable = new JTable(invoiceModel);
+        invoiceTable.setRowHeight(30);
+        invoiceTable.setFont(new Font("Segoe UI", Font.PLAIN, 12));
+        invoiceTable.setGridColor(new Color(220, 225, 235));
+        invoiceTable.setShowHorizontalLines(true);
+        invoiceTable.setShowVerticalLines(true);
+        invoiceTable.setSelectionBackground(new Color(180, 210, 255));
+
+        invoiceTable.getTableHeader().setFont(new Font("Segoe UI", Font.BOLD, 12));
+        invoiceTable.getTableHeader().setBackground(new Color(0, 102, 204));
+        invoiceTable.getTableHeader().setForeground(Color.WHITE);
+        invoiceTable.getTableHeader().setPreferredSize(new Dimension(0, 36));
+
+        int[] colWidths = {200, 90, 110, 110, 100, 120, 100};
+        for (int i = 0; i < colWidths.length; i++)
+            invoiceTable.getColumnModel().getColumn(i).setPreferredWidth(colWidths[i]);
+
+        
+        invoiceTable.getColumnModel().getColumn(5).setCellRenderer(new DefaultTableCellRenderer() {
+            @Override
+            public Component getTableCellRendererComponent(JTable t, Object val,
+                    boolean sel, boolean foc, int row, int col) {
+                JLabel lbl = (JLabel) super.getTableCellRendererComponent(t, val, sel, foc, row, col);
+                String v = val != null ? val.toString() : "";
+                lbl.setHorizontalAlignment(JLabel.CENTER);
+                lbl.setFont(lbl.getFont().deriveFont(Font.BOLD));
+                if (!sel) {
+                    if ("Paid".equalsIgnoreCase(v)) {
+                        lbl.setBackground(new Color(220, 255, 220));
+                        lbl.setForeground(new Color(0, 140, 0));
+                        lbl.setText("✓ Paid");
+                    } else {
+                        lbl.setBackground(new Color(255, 220, 220));
+                        lbl.setForeground(new Color(180, 0, 0));
+                        lbl.setText("✗ Unpaid");
+                    }
+                }
+                return lbl;
+            }
+        });
+
+        
+        invoiceTable.getColumnModel().getColumn(4).setCellRenderer(new DefaultTableCellRenderer() {
+            @Override
+            public Component getTableCellRendererComponent(JTable t, Object val,
+                    boolean sel, boolean foc, int row, int col) {
+                JLabel lbl = (JLabel) super.getTableCellRendererComponent(t, val, sel, foc, row, col);
+                String v   = val != null ? val.toString() : "";
+                String pay = t.getValueAt(row, 5) != null ? t.getValueAt(row, 5).toString() : "";
+                lbl.setHorizontalAlignment(JLabel.CENTER);
+                lbl.setFont(lbl.getFont().deriveFont(Font.BOLD));
+                if (!sel) {
+                    lbl.setBackground("Unpaid".equalsIgnoreCase(pay) ?
+                        new Color(255, 220, 220) : new Color(220, 255, 220));
+                    lbl.setForeground("active".equalsIgnoreCase(v) ?
+                        new Color(0, 130, 0) : new Color(180, 0, 0));
+                }
+                return lbl;
+            }
+        });
+
+        
+        DefaultTableCellRenderer rowRenderer = new DefaultTableCellRenderer() {
+            @Override
+            public Component getTableCellRendererComponent(JTable t, Object val,
+                    boolean sel, boolean foc, int row, int col) {
+                JLabel lbl = (JLabel) super.getTableCellRendererComponent(t, val, sel, foc, row, col);
+                if (!sel) {
+                    String pay = t.getValueAt(row, 5) != null ? t.getValueAt(row, 5).toString() : "";
+                    lbl.setBackground("Unpaid".equalsIgnoreCase(pay) ?
+                        new Color(255, 245, 245) : new Color(245, 255, 245));
+                    lbl.setForeground(Color.BLACK);
+                }
+                if (col == 6) lbl.setHorizontalAlignment(JLabel.RIGHT);
+                return lbl;
+            }
+        };
+        for (int c : new int[]{0, 1, 2, 3, 6})
+            invoiceTable.getColumnModel().getColumn(c).setCellRenderer(rowRenderer);
+
+        JScrollPane tableScroll = new JScrollPane(invoiceTable);
+        tableScroll.setBorder(BorderFactory.createEmptyBorder(10, 15, 5, 15));
+        tableScroll.getViewport().setBackground(Color.WHITE);
+
+        JLabel legendLbl = new JLabel(
+            "<html>&nbsp;&nbsp;<b>Legend:</b> &nbsp;" +
+            "<span style='color:green'>&#9632; Paid / Active</span> &nbsp;&nbsp; " +
+            "<span style='color:red'>&#9632; Unpaid / Inactive</span></html>");
+        legendLbl.setFont(new Font("Segoe UI", Font.PLAIN, 11));
+        legendLbl.setBorder(BorderFactory.createEmptyBorder(5, 15, 5, 15));
+
+        JPanel tablePanel = new JPanel(new BorderLayout());
+        tablePanel.setBackground(Color.WHITE);
+        tablePanel.add(legendLbl,   BorderLayout.NORTH);
+        tablePanel.add(tableScroll, BorderLayout.CENTER);
+
+        JPanel summaryPanel = new JPanel(new java.awt.FlowLayout(java.awt.FlowLayout.LEFT, 25, 10));
+summaryPanel.setBackground(new Color(240, 245, 255));
+summaryPanel.setBorder(BorderFactory.createMatteBorder(2, 0, 0, 0, new Color(0, 102, 204)));
+summaryPanel.setPreferredSize(new Dimension(0, 55));  
+
+        JLabel recLbl    = new JLabel("Total Records: " + invoiceCount);
+        recLbl.setFont(new Font("Segoe UI", Font.PLAIN, 12));
+
+        JLabel billedLbl = new JLabel(String.format("Total Billed: ₱%.2f", totalBilled));
+        billedLbl.setFont(new Font("Segoe UI", Font.BOLD, 13));
+        billedLbl.setForeground(new Color(0, 60, 150));
+
+        JLabel paidLbl   = new JLabel(String.format("✓ Paid: ₱%.2f", totalPaid));
+        paidLbl.setFont(new Font("Segoe UI", Font.BOLD, 12));
+        paidLbl.setForeground(new Color(0, 140, 0));
+
+        JLabel unpaidLbl = new JLabel(String.format("✗ Balance: ₱%.2f", totalUnpaid));
+        unpaidLbl.setFont(new Font("Segoe UI", Font.BOLD, 12));
+        unpaidLbl.setForeground(new Color(180, 0, 0));
+
+        summaryPanel.add(recLbl);
+        summaryPanel.add(billedLbl);
+        summaryPanel.add(paidLbl);
+        summaryPanel.add(unpaidLbl);
+
+       
+JPanel btnPanel = new JPanel(new java.awt.FlowLayout(java.awt.FlowLayout.CENTER, 15, 10));
+btnPanel.setBackground(new Color(245, 245, 245));
+btnPanel.setBorder(BorderFactory.createMatteBorder(1, 0, 0, 0, Color.LIGHT_GRAY));
+btnPanel.setPreferredSize(new Dimension(0, 65));  
+
+        JButton printBtn = new JButton("🖨  PRINT SOA");
+        printBtn.setFont(new Font("Segoe UI Black", Font.BOLD, 13));
+        printBtn.setBackground(new Color(0, 153, 51));
+        printBtn.setForeground(Color.WHITE);
+        printBtn.setFocusPainted(false);
+        printBtn.setPreferredSize(new Dimension(160, 42));
+        printBtn.setCursor(new Cursor(Cursor.HAND_CURSOR));
+        printBtn.addActionListener(e -> {
+            java.awt.print.PrinterJob printerJob = java.awt.print.PrinterJob.getPrinterJob();
+            printerJob.setPrintable((graphics, pageFormat, pageIndex) -> {
+                if (pageIndex > 0) return java.awt.print.Printable.NO_SUCH_PAGE;
+                Graphics2D g2d = (Graphics2D) graphics;
+                g2d.translate(pageFormat.getImageableX(), pageFormat.getImageableY());
+                double scaleX = pageFormat.getImageableWidth()  / soaDialog.getWidth();
+                double scaleY = pageFormat.getImageableHeight() / soaDialog.getHeight();
+                double scale  = Math.min(scaleX, scaleY);
+                g2d.scale(scale, scale);
+                soaDialog.printAll(g2d);
+                return java.awt.print.Printable.PAGE_EXISTS;
+            });
+            if (printerJob.printDialog()) {
+                try {
+                    printerJob.print();
+                    JOptionPane.showMessageDialog(soaDialog,
+                        "✅ SOA sent to printer successfully!", "Print Success",
+                        JOptionPane.INFORMATION_MESSAGE);
+                } catch (java.awt.print.PrinterException pe) {
+                    JOptionPane.showMessageDialog(soaDialog,
+                        "❌ Print Error: " + pe.getMessage(), "Print Error",
+                        JOptionPane.ERROR_MESSAGE);
+                }
+            }
+        });
+
+        JButton closeBtn = new JButton("✕  CLOSE");
+        closeBtn.setFont(new Font("Segoe UI Black", Font.BOLD, 13));
+        closeBtn.setBackground(new Color(180, 0, 0));
+        closeBtn.setForeground(Color.WHITE);
+        closeBtn.setFocusPainted(false);
+        closeBtn.setPreferredSize(new Dimension(130, 42));
+        closeBtn.setCursor(new Cursor(Cursor.HAND_CURSOR));
+        closeBtn.addActionListener(e -> soaDialog.dispose());
+
+        btnPanel.add(printBtn);
+        btnPanel.add(closeBtn);
+
+        
+JPanel southComposite = new JPanel(new BorderLayout());
+
+southComposite.add(summaryPanel, BorderLayout.CENTER);
+southComposite.add(btnPanel,     BorderLayout.SOUTH);
+
+        
+        soaDialog.add(northComposite, BorderLayout.NORTH);
+        soaDialog.add(tablePanel,     BorderLayout.CENTER);
+        soaDialog.add(southComposite, BorderLayout.SOUTH);
+        soaDialog.setVisible(true);
+    }
+
+
+private JPanel makeInfoBlock(String label, String value) {
+    JPanel block = new JPanel();
+    block.setLayout(new javax.swing.BoxLayout(block, javax.swing.BoxLayout.Y_AXIS));
+    block.setBackground(new Color(240, 245, 255));
+    JLabel lbl = new JLabel(label);
+    lbl.setFont(new Font("Segoe UI", Font.BOLD, 10));
+    lbl.setForeground(new Color(100, 100, 130));
+    JLabel val = new JLabel(value != null ? value : "N/A");
+    val.setFont(new Font("Segoe UI", Font.PLAIN, 12));
+    val.setForeground(new Color(30, 30, 60));
+    block.add(lbl);
+    block.add(Box.createVerticalStrut(2));
+    block.add(val);
+    return block;
+}
+
+   private void showCustomerDetails(String slotNum) {
+    try (Connection conn = DriverManager.getConnection(DB_URL, DB_USER, DB_PASSWORD)) {
+        String sql = "SELECT * FROM clientdata WHERE SlotNum = ?";
+        PreparedStatement pst = conn.prepareStatement(sql);
+        pst.setString(1, slotNum);
+        ResultSet rs = pst.executeQuery();
+
+        if (rs.next()) {
+            final String customerName    = rs.getString("Name");
+            final String customerContact = rs.getString("ContactNumber");
+
+            JDialog dialog = new JDialog(this, "Customer Details - Slot #" + slotNum, true);
+            dialog.setSize(950, 650);
+            dialog.setLayout(new BorderLayout(10, 10));
+            dialog.setLocationRelativeTo(this);
+            dialog.getContentPane().setBackground(new Color(0, 153, 204));
+
+            JPanel mainPanel = new JPanel(new BorderLayout(15, 15));
+            mainPanel.setBackground(new Color(0, 153, 204));
+            mainPanel.setBorder(BorderFactory.createEmptyBorder(15, 15, 15, 15));
+
+            
+            JPanel infoPanel = new JPanel();
+            infoPanel.setLayout(new java.awt.GridBagLayout());
+            infoPanel.setBorder(BorderFactory.createEmptyBorder(20, 25, 20, 25));
+            infoPanel.setBackground(new Color(0, 180, 215));
+
+            java.awt.GridBagConstraints gbc = new java.awt.GridBagConstraints();
+            gbc.insets  = new java.awt.Insets(6, 10, 6, 20);
+            gbc.anchor  = java.awt.GridBagConstraints.WEST;
+            gbc.fill    = java.awt.GridBagConstraints.HORIZONTAL;
+
+            int[] rowIdx = {0};
+
+            
+            java.util.function.BiConsumer<String, String> addRow = (label, value) -> {
+                gbc.gridx = 0; gbc.gridy = rowIdx[0];
+                gbc.weightx = 0.4; gbc.gridwidth = 1;
+                JLabel lbl = new JLabel(label);
+                lbl.setForeground(new Color(200, 235, 255));
+                lbl.setFont(new Font("Segoe UI", Font.BOLD, 13));
+                infoPanel.add(lbl, gbc);
+
+                gbc.gridx = 1;
+                gbc.weightx = 0.6;
+                JLabel val = new JLabel(value != null && !value.isEmpty() ? value : "N/A");
+                val.setForeground(Color.WHITE);
+                val.setFont(new Font("Segoe UI", Font.PLAIN, 14));
+                infoPanel.add(val, gbc);
+                rowIdx[0]++;
+            };
+
+            
+            java.util.function.Consumer<String> addDivider = (title) -> {
+                gbc.gridx = 0; gbc.gridy = rowIdx[0];
+                gbc.gridwidth = 2; gbc.weightx = 1.0;
+                gbc.insets = new java.awt.Insets(12, 10, 4, 10);
+                JLabel div = new JLabel("  " + title);
+                div.setForeground(Color.WHITE);
+                div.setFont(new Font("Segoe UI Black", Font.BOLD, 11));
+                div.setOpaque(true);
+                div.setBackground(new Color(0, 130, 180));
+                div.setBorder(BorderFactory.createEmptyBorder(4, 8, 4, 8));
+                infoPanel.add(div, gbc);
+                gbc.gridwidth = 1;
+                gbc.insets = new java.awt.Insets(6, 10, 6, 20);
+                rowIdx[0]++;
+            };
+
+            
+            addDivider.accept("ACCOUNT INFO");
+            addRow.accept("Slot Number",   rs.getString("SlotNum"));
+            addRow.accept("Status",        rs.getString("status"));
+            addRow.accept("Plan Rate",     rs.getString("PlanRate"));
+
+            
+            addDivider.accept("PERSONAL INFO");
+            addRow.accept("Name",               rs.getString("Name"));
+            addRow.accept("Address",            rs.getString("Address"));
+            addRow.accept("Facebook/Messenger", rs.getString("Gmail"));
+            addRow.accept("Contact Number",     rs.getString("ContactNumber"));
+
+            
+            addDivider.accept("BILLING INFO");
+            addRow.accept("Registered Date", rs.getString("DateOfRegister"));
+            addRow.accept("Last Payment",    rs.getString("LastPaymentDate"));
+
+            
+            String nextDueDateDisplay = "N/A";
+            try (Connection connDue = DriverManager.getConnection(DB_URL, DB_USER, DB_PASSWORD)) {
+                PreparedStatement pstClient = connDue.prepareStatement(
+                    "SELECT NextDueDate FROM clientdata WHERE SlotNum = ?");
+                pstClient.setString(1, slotNum);
+                ResultSet rsClient = pstClient.executeQuery();
+                if (rsClient.next() && rsClient.getString("NextDueDate") != null) {
+                    nextDueDateDisplay = rsClient.getString("NextDueDate");
+                }
+                if ("N/A".equals(nextDueDateDisplay)) {
+                    PreparedStatement pstDue = connDue.prepareStatement(
+                        "SELECT MIN(invoice_due_date) AS next_due FROM invoices " +
+                        "WHERE slot_num = ? AND LOWER(invoice_status) = 'unpaid' " +
+                        "AND invoice_due_date IS NOT NULL");
+                    pstDue.setString(1, slotNum);
+                    ResultSet rsDue = pstDue.executeQuery();
+                    if (rsDue.next() && rsDue.getString("next_due") != null) {
+                        nextDueDateDisplay = rsDue.getString("next_due");
+                    }
+                }
+                if ("N/A".equals(nextDueDateDisplay)) {
+                    PreparedStatement pstPaid = connDue.prepareStatement(
+                        "SELECT invoice_due_date FROM invoices " +
+                        "WHERE slot_num = ? AND LOWER(invoice_status) = 'paid' " +
+                        "AND invoice_due_date IS NOT NULL " +
+                        "ORDER BY invoice_date DESC LIMIT 1");
+                    pstPaid.setString(1, slotNum);
+                    ResultSet rsPaid = pstPaid.executeQuery();
+                    if (rsPaid.next() && rsPaid.getString("invoice_due_date") != null) {
+                        nextDueDateDisplay = rsPaid.getString("invoice_due_date");
+                    }
+                }
+            } catch (Exception ignored) {}
+
+            addRow.accept("Next Due Date", nextDueDateDisplay);
+
+            
+            JPanel picturesPanel = new JPanel(new BorderLayout());
+            picturesPanel.setBackground(new Color(0, 153, 204));
+            picturesPanel.setBorder(BorderFactory.createEmptyBorder(15, 15, 15, 15));
+
+            JPanel idPicPanel = new JPanel(new BorderLayout());
+            idPicPanel.setBackground(new Color(0, 180, 215));
+            idPicPanel.setBorder(BorderFactory.createLineBorder(Color.WHITE, 2));
+
+            JLabel idLabel = new JLabel("ID PICTURE (Click to enlarge)", JLabel.CENTER);
+            idLabel.setFont(new Font("Segoe UI Black", Font.BOLD, 14));
+            idLabel.setForeground(Color.WHITE);
+            idLabel.setBackground(new Color(0, 153, 204));
+            idLabel.setOpaque(true);
+
+            JLabel idImageLabel = new JLabel();
+            idImageLabel.setHorizontalAlignment(JLabel.CENTER);
+            idImageLabel.setVerticalAlignment(JLabel.CENTER);
+            idImageLabel.setBackground(Color.BLACK);
+            idImageLabel.setOpaque(true);
+
+            final java.awt.image.BufferedImage[] fullIDImage = new java.awt.image.BufferedImage[1];
+
+            try {
+                byte[] idPicData = rs.getBytes("IDPicture");
+                if (idPicData != null && idPicData.length > 0) {
+                    java.awt.image.BufferedImage idImg = ImageIO.read(new ByteArrayInputStream(idPicData));
+                    if (idImg != null) {
+                        fullIDImage[0] = idImg;
+                        Image scaledImg = idImg.getScaledInstance(300, 200, Image.SCALE_SMOOTH);
+                        idImageLabel.setIcon(new ImageIcon(scaledImg));
+                        idImageLabel.setCursor(new Cursor(Cursor.HAND_CURSOR));
+                        idImageLabel.addMouseListener(new java.awt.event.MouseAdapter() {
+                            @Override
+                            public void mouseClicked(java.awt.event.MouseEvent evt) {
+                                if (fullIDImage[0] != null) {
+                                    showFullScreenImage(fullIDImage[0], "ID Picture - Slot #" + slotNum);
+                                }
+                            }
+                        });
+                    }
+                } else {
+                    idImageLabel.setText("No Picture");
+                    idImageLabel.setForeground(Color.GRAY);
+                    idImageLabel.setFont(new Font("Segoe UI", Font.PLAIN, 12));
+                }
+            } catch (Exception e) {
+                idImageLabel.setText("Error Loading Picture");
+                idImageLabel.setForeground(Color.RED);
+                idImageLabel.setFont(new Font("Segoe UI", Font.PLAIN, 11));
+            }
+
+            idPicPanel.add(idLabel,      BorderLayout.NORTH);
+            idPicPanel.add(idImageLabel, BorderLayout.CENTER);
+            picturesPanel.add(idPicPanel, BorderLayout.CENTER);
+
+            mainPanel.add(infoPanel,     BorderLayout.WEST);
+            mainPanel.add(picturesPanel, BorderLayout.EAST);
+
+            
+            JButton soaBtn = new JButton("SOA (Statement of Accounts)");
+            soaBtn.setBackground(new Color(0, 100, 200));
+            soaBtn.setForeground(Color.WHITE);
+            soaBtn.setFont(new Font("Segoe UI Black", Font.BOLD, 12));
+            soaBtn.setPreferredSize(new Dimension(250, 40));
+            soaBtn.addActionListener(e -> showProfessionalSOA(slotNum, customerName, customerContact));
+
+            JButton closeBtn = new JButton("CLOSE");
+            closeBtn.setBackground(new Color(100, 100, 100));
+            closeBtn.setForeground(Color.WHITE);
+            closeBtn.setFont(new Font("Segoe UI Black", Font.BOLD, 13));
+            closeBtn.setPreferredSize(new Dimension(150, 40));
+            closeBtn.addActionListener(e -> dialog.dispose());
+
+            JPanel btnPanel = new JPanel();
+            btnPanel.setBackground(new Color(0, 153, 204));
+            btnPanel.add(soaBtn);
+            btnPanel.add(Box.createHorizontalStrut(10));
+            btnPanel.add(closeBtn);
+
+            dialog.add(mainPanel, BorderLayout.CENTER);
+            dialog.add(btnPanel,  BorderLayout.SOUTH);
+            dialog.setVisible(true);
+        }
+    } catch (Exception ex) {
+        JOptionPane.showMessageDialog(this, "Error: " + ex.getMessage());
+        History.logError("VIEW_DETAILS", currentUser,
+            "Failed to view customer details for slot " + slotNum + ": " + ex.getMessage());
+    }
+}
+
+
+    private void addFormField(JPanel panel, String label, JTextField field) {
+        JLabel lbl = new JLabel(label);
+        lbl.setForeground(Color.WHITE);
+        lbl.setFont(new Font("Segoe UI", Font.BOLD, 13));
+        panel.add(lbl);
+        panel.add(field);
+    }
+
+      private JLabel createLabel(String text) {
+        JLabel lbl = new JLabel(text);
+        lbl.setForeground(Color.WHITE);
+        lbl.setFont(new Font("Segoe UI", Font.BOLD, 13));
+        return lbl;
+    }
+      
+    private void addInfoRow(JPanel panel, String label, String value) {
+        JLabel lbl = new JLabel(label);
+        lbl.setForeground(Color.WHITE);
+        lbl.setFont(new Font("Segoe UI", Font.BOLD, 16));
+        JLabel val = new JLabel(value != null ? value : "N/A");
+        val.setForeground(Color.WHITE);
+        val.setFont(new Font("Segoe UI", Font.PLAIN, 15));
+        panel.add(lbl);
+        panel.add(val);
+    }
+   
+
+
+    /**
+     * This method is called from within the constructor to initialize the form.
+     * WARNING: Do NOT modify this code. The content of this method is always
+     * regenerated by the Form Editor.
+     */
+    @SuppressWarnings("unchecked")
+    // <editor-fold defaultstate="collapsed" desc="Generated Code">                          
+    private void initComponents() {
+
+        jPanel3 = new javax.swing.JPanel();
+        jLabel9 = new javax.swing.JLabel();
+        jPanel4 = new javax.swing.JPanel();
+        jScrollPane1 = new javax.swing.JScrollPane();
+        jTable1 = new javax.swing.JTable();
+        jButton1 = new javax.swing.JButton();
+        txtSearch = new javax.swing.JTextField();
+        btnSearch = new javax.swing.JButton();
+        jLabel1 = new javax.swing.JLabel();
+        jButton6 = new javax.swing.JButton();
+        jButton2 = new javax.swing.JButton();
+        jButton3 = new javax.swing.JButton();
+        jButton4 = new javax.swing.JButton();
+        jButton5 = new javax.swing.JButton();
+        jButton9 = new javax.swing.JButton();
+
+        setDefaultCloseOperation(javax.swing.WindowConstants.EXIT_ON_CLOSE);
+
+        jPanel3.setBackground(new java.awt.Color(0, 153, 255));
+        jPanel3.setLayout(new org.netbeans.lib.awtextra.AbsoluteLayout());
+
+        jLabel9.setFont(new java.awt.Font("Segoe UI Black", 0, 60)); // NOI18N
+        jLabel9.setForeground(new java.awt.Color(255, 255, 255));
+        jLabel9.setText("LIST");
+        jPanel3.add(jLabel9, new org.netbeans.lib.awtextra.AbsoluteConstraints(440, 20, -1, -1));
+
+        jPanel4.setBackground(new java.awt.Color(0, 153, 204));
+        jPanel4.setBorder(javax.swing.BorderFactory.createLineBorder(new java.awt.Color(255, 255, 255), 3));
+        jPanel4.setCursor(new java.awt.Cursor(java.awt.Cursor.DEFAULT_CURSOR));
+        jPanel4.setLayout(new org.netbeans.lib.awtextra.AbsoluteLayout());
+
+        jTable1.setModel(new javax.swing.table.DefaultTableModel(
+            new Object [][] {
+                {null, null, null, null, null, null},
+                {null, null, null, null, null, null},
+                {null, null, null, null, null, null},
+                {null, null, null, null, null, null},
+                {null, null, null, null, null, null},
+                {null, null, null, null, null, null},
+                {null, null, null, null, null, null},
+                {null, null, null, null, null, null},
+                {null, null, null, null, null, null},
+                {null, null, null, null, null, null},
+                {null, null, null, null, null, null},
+                {null, null, null, null, null, null},
+                {null, null, null, null, null, null},
+                {null, null, null, null, null, null},
+                {null, null, null, null, null, null},
+                {null, null, null, null, null, null},
+                {null, null, null, null, null, null},
+                {null, null, null, null, null, null},
+                {null, null, null, null, null, null},
+                {null, null, null, null, null, null},
+                {null, null, null, null, null, null},
+                {null, null, null, null, null, null},
+                {null, null, null, null, null, null},
+                {null, null, null, null, null, null},
+                {null, null, null, null, null, null},
+                {null, null, null, null, null, null},
+                {null, null, null, null, null, null},
+                {null, null, null, null, null, null},
+                {null, null, null, null, null, null},
+                {null, null, null, null, null, null},
+                {null, null, null, null, null, null},
+                {null, null, null, null, null, null},
+                {null, null, null, null, null, null},
+                {null, null, null, null, null, null},
+                {null, null, null, null, null, null},
+                {null, null, null, null, null, null},
+                {null, null, null, null, null, null},
+                {null, null, null, null, null, null},
+                {null, null, null, null, null, null},
+                {null, null, null, null, null, null},
+                {null, null, null, null, null, null},
+                {null, null, null, null, null, null},
+                {null, null, null, null, null, null},
+                {null, null, null, null, null, null},
+                {null, null, null, null, null, null},
+                {null, null, null, null, null, null},
+                {null, null, null, null, null, null},
+                {null, null, null, null, null, null},
+                {null, null, null, null, null, null},
+                {null, null, null, null, null, null},
+                {null, null, null, null, null, null},
+                {null, null, null, null, null, null},
+                {null, null, null, null, null, null},
+                {null, null, null, null, null, null},
+                {null, null, null, null, null, null},
+                {null, null, null, null, null, null},
+                {null, null, null, null, null, null},
+                {null, null, null, null, null, null},
+                {null, null, null, null, null, null},
+                {null, null, null, null, null, null},
+                {null, null, null, null, null, null},
+                {null, null, null, null, null, null},
+                {null, null, null, null, null, null},
+                {null, null, null, null, null, null},
+                {null, null, null, null, null, null},
+                {null, null, null, null, null, null},
+                {null, null, null, null, null, null},
+                {null, null, null, null, null, null},
+                {null, null, null, null, null, null},
+                {null, null, null, null, null, null},
+                {null, null, null, null, null, null},
+                {null, null, null, null, null, null},
+                {null, null, null, null, null, null},
+                {null, null, null, null, null, null},
+                {null, null, null, null, null, null},
+                {null, null, null, null, null, null},
+                {null, null, null, null, null, null},
+                {null, null, null, null, null, null},
+                {null, null, null, null, null, null},
+                {null, null, null, null, null, null},
+                {null, null, null, null, null, null},
+                {null, null, null, null, null, null},
+                {null, null, null, null, null, null},
+                {null, null, null, null, null, null},
+                {null, null, null, null, null, null},
+                {null, null, null, null, null, null},
+                {null, null, null, null, null, null},
+                {null, null, null, null, null, null},
+                {null, null, null, null, null, null},
+                {null, null, null, null, null, null},
+                {null, null, null, null, null, null},
+                {null, null, null, null, null, null},
+                {null, null, null, null, null, null},
+                {null, null, null, null, null, null},
+                {null, null, null, null, null, null},
+                {null, null, null, null, null, null},
+                {null, null, null, null, null, null},
+                {null, null, null, null, null, null},
+                {null, null, null, null, null, null},
+                {null, null, null, null, null, null},
+                {null, null, null, null, null, null},
+                {null, null, null, null, null, null},
+                {null, null, null, null, null, null},
+                {null, null, null, null, null, null},
+                {null, null, null, null, null, null},
+                {null, null, null, null, null, null},
+                {null, null, null, null, null, null},
+                {null, null, null, null, null, null},
+                {null, null, null, null, null, null},
+                {null, null, null, null, null, null},
+                {null, null, null, null, null, null},
+                {null, null, null, null, null, null},
+                {null, null, null, null, null, null},
+                {null, null, null, null, null, null},
+                {null, null, null, null, null, null},
+                {null, null, null, null, null, null},
+                {null, null, null, null, null, null},
+                {null, null, null, null, null, null},
+                {null, null, null, null, null, null},
+                {null, null, null, null, null, null},
+                {null, null, null, null, null, null},
+                {null, null, null, null, null, null},
+                {null, null, null, null, null, null},
+                {null, null, null, null, null, null},
+                {null, null, null, null, null, null},
+                {null, null, null, null, null, null},
+                {null, null, null, null, null, null},
+                {null, null, null, null, null, null},
+                {null, null, null, null, null, null},
+                {null, null, null, null, null, null},
+                {null, null, null, null, null, null},
+                {null, null, null, null, null, null},
+                {null, null, null, null, null, null},
+                {null, null, null, null, null, null},
+                {null, null, null, null, null, null},
+                {null, null, null, null, null, null},
+                {null, null, null, null, null, null},
+                {null, null, null, null, null, null},
+                {null, null, null, null, null, null},
+                {null, null, null, null, null, null},
+                {null, null, null, null, null, null},
+                {null, null, null, null, null, null},
+                {null, null, null, null, null, null},
+                {null, null, null, null, null, null},
+                {null, null, null, null, null, null},
+                {null, null, null, null, null, null},
+                {null, null, null, null, null, null},
+                {null, null, null, null, null, null},
+                {null, null, null, null, null, null},
+                {null, null, null, null, null, null},
+                {null, null, null, null, null, null},
+                {null, null, null, null, null, null},
+                {null, null, null, null, null, null},
+                {null, null, null, null, null, null},
+                {null, null, null, null, null, null},
+                {null, null, null, null, null, null},
+                {null, null, null, null, null, null},
+                {null, null, null, null, null, null},
+                {null, null, null, null, null, null},
+                {null, null, null, null, null, null},
+                {null, null, null, null, null, null},
+                {null, null, null, null, null, null},
+                {null, null, null, null, null, null},
+                {null, null, null, null, null, null},
+                {null, null, null, null, null, null},
+                {null, null, null, null, null, null},
+                {null, null, null, null, null, null},
+                {null, null, null, null, null, null},
+                {null, null, null, null, null, null},
+                {null, null, null, null, null, null},
+                {null, null, null, null, null, null},
+                {null, null, null, null, null, null},
+                {null, null, null, null, null, null},
+                {null, null, null, null, null, null},
+                {null, null, null, null, null, null},
+                {null, null, null, null, null, null},
+                {null, null, null, null, null, null},
+                {null, null, null, null, null, null},
+                {null, null, null, null, null, null},
+                {null, null, null, null, null, null},
+                {null, null, null, null, null, null},
+                {null, null, null, null, null, null},
+                {null, null, null, null, null, null},
+                {null, null, null, null, null, null},
+                {null, null, null, null, null, null},
+                {null, null, null, null, null, null},
+                {null, null, null, null, null, null},
+                {null, null, null, null, null, null},
+                {null, null, null, null, null, null},
+                {null, null, null, null, null, null},
+                {null, null, null, null, null, null},
+                {null, null, null, null, null, null},
+                {null, null, null, null, null, null},
+                {null, null, null, null, null, null},
+                {null, null, null, null, null, null},
+                {null, null, null, null, null, null},
+                {null, null, null, null, null, null},
+                {null, null, null, null, null, null},
+                {null, null, null, null, null, null},
+                {null, null, null, null, null, null},
+                {null, null, null, null, null, null},
+                {null, null, null, null, null, null},
+                {null, null, null, null, null, null},
+                {null, null, null, null, null, null},
+                {null, null, null, null, null, null},
+                {null, null, null, null, null, null},
+                {null, null, null, null, null, null},
+                {null, null, null, null, null, null},
+                {null, null, null, null, null, null},
+                {null, null, null, null, null, null},
+                {null, null, null, null, null, null},
+                {null, null, null, null, null, null},
+                {null, null, null, null, null, null},
+                {null, null, null, null, null, null},
+                {null, null, null, null, null, null},
+                {null, null, null, null, null, null},
+                {null, null, null, null, null, null},
+                {null, null, null, null, null, null},
+                {null, null, null, null, null, null},
+                {null, null, null, null, null, null},
+                {null, null, null, null, null, null},
+                {null, null, null, null, null, null},
+                {null, null, null, null, null, null},
+                {null, null, null, null, null, null},
+                {null, null, null, null, null, null},
+                {null, null, null, null, null, null},
+                {null, null, null, null, null, null},
+                {null, null, null, null, null, null},
+                {null, null, null, null, null, null},
+                {null, null, null, null, null, null},
+                {null, null, null, null, null, null},
+                {null, null, null, null, null, null},
+                {null, null, null, null, null, null},
+                {null, null, null, null, null, null},
+                {null, null, null, null, null, null},
+                {null, null, null, null, null, null},
+                {null, null, null, null, null, null},
+                {null, null, null, null, null, null},
+                {null, null, null, null, null, null},
+                {null, null, null, null, null, null},
+                {null, null, null, null, null, null},
+                {null, null, null, null, null, null},
+                {null, null, null, null, null, null},
+                {null, null, null, null, null, null},
+                {null, null, null, null, null, null},
+                {null, null, null, null, null, null},
+                {null, null, null, null, null, null},
+                {null, null, null, null, null, null},
+                {null, null, null, null, null, null},
+                {null, null, null, null, null, null},
+                {null, null, null, null, null, null},
+                {null, null, null, null, null, null},
+                {null, null, null, null, null, null},
+                {null, null, null, null, null, null},
+                {null, null, null, null, null, null},
+                {null, null, null, null, null, null},
+                {null, null, null, null, null, null},
+                {null, null, null, null, null, null},
+                {null, null, null, null, null, null},
+                {null, null, null, null, null, null},
+                {null, null, null, null, null, null},
+                {null, null, null, null, null, null},
+                {null, null, null, null, null, null},
+                {null, null, null, null, null, null},
+                {null, null, null, null, null, null},
+                {null, null, null, null, null, null},
+                {null, null, null, null, null, null},
+                {null, null, null, null, null, null},
+                {null, null, null, null, null, null},
+                {null, null, null, null, null, null},
+                {null, null, null, null, null, null},
+                {null, null, null, null, null, null},
+                {null, null, null, null, null, null},
+                {null, null, null, null, null, null},
+                {null, null, null, null, null, null},
+                {null, null, null, null, null, null},
+                {null, null, null, null, null, null},
+                {null, null, null, null, null, null},
+                {null, null, null, null, null, null},
+                {null, null, null, null, null, null},
+                {null, null, null, null, null, null},
+                {null, null, null, null, null, null},
+                {null, null, null, null, null, null},
+                {null, null, null, null, null, null},
+                {null, null, null, null, null, null},
+                {null, null, null, null, null, null},
+                {null, null, null, null, null, null},
+                {null, null, null, null, null, null},
+                {null, null, null, null, null, null},
+                {null, null, null, null, null, null},
+                {null, null, null, null, null, null},
+                {null, null, null, null, null, null},
+                {null, null, null, null, null, null},
+                {null, null, null, null, null, null},
+                {null, null, null, null, null, null},
+                {null, null, null, null, null, null},
+                {null, null, null, null, null, null},
+                {null, null, null, null, null, null},
+                {null, null, null, null, null, null},
+                {null, null, null, null, null, null},
+                {null, null, null, null, null, null},
+                {null, null, null, null, null, null},
+                {null, null, null, null, null, null},
+                {null, null, null, null, null, null},
+                {null, null, null, null, null, null},
+                {null, null, null, null, null, null},
+                {null, null, null, null, null, null},
+                {null, null, null, null, null, null},
+                {null, null, null, null, null, null},
+                {null, null, null, null, null, null},
+                {null, null, null, null, null, null},
+                {null, null, null, null, null, null},
+                {null, null, null, null, null, null},
+                {null, null, null, null, null, null},
+                {null, null, null, null, null, null},
+                {null, null, null, null, null, null},
+                {null, null, null, null, null, null},
+                {null, null, null, null, null, null},
+                {null, null, null, null, null, null},
+                {null, null, null, null, null, null},
+                {null, null, null, null, null, null},
+                {null, null, null, null, null, null},
+                {null, null, null, null, null, null},
+                {null, null, null, null, null, null},
+                {null, null, null, null, null, null},
+                {null, null, null, null, null, null},
+                {null, null, null, null, null, null},
+                {null, null, null, null, null, null},
+                {null, null, null, null, null, null},
+                {null, null, null, null, null, null},
+                {null, null, null, null, null, null},
+                {null, null, null, null, null, null},
+                {null, null, null, null, null, null},
+                {null, null, null, null, null, null},
+                {null, null, null, null, null, null},
+                {null, null, null, null, null, null},
+                {null, null, null, null, null, null},
+                {null, null, null, null, null, null},
+                {null, null, null, null, null, null},
+                {null, null, null, null, null, null},
+                {null, null, null, null, null, null},
+                {null, null, null, null, null, null},
+                {null, null, null, null, null, null},
+                {null, null, null, null, null, null},
+                {null, null, null, null, null, null},
+                {null, null, null, null, null, null},
+                {null, null, null, null, null, null},
+                {null, null, null, null, null, null},
+                {null, null, null, null, null, null},
+                {null, null, null, null, null, null},
+                {null, null, null, null, null, null},
+                {null, null, null, null, null, null},
+                {null, null, null, null, null, null},
+                {null, null, null, null, null, null},
+                {null, null, null, null, null, null},
+                {null, null, null, null, null, null},
+                {null, null, null, null, null, null},
+                {null, null, null, null, null, null},
+                {null, null, null, null, null, null},
+                {null, null, null, null, null, null},
+                {null, null, null, null, null, null},
+                {null, null, null, null, null, null},
+                {null, null, null, null, null, null},
+                {null, null, null, null, null, null},
+                {null, null, null, null, null, null},
+                {null, null, null, null, null, null},
+                {null, null, null, null, null, null},
+                {null, null, null, null, null, null},
+                {null, null, null, null, null, null},
+                {null, null, null, null, null, null},
+                {null, null, null, null, null, null},
+                {null, null, null, null, null, null},
+                {null, null, null, null, null, null},
+                {null, null, null, null, null, null},
+                {null, null, null, null, null, null},
+                {null, null, null, null, null, null},
+                {null, null, null, null, null, null},
+                {null, null, null, null, null, null},
+                {null, null, null, null, null, null},
+                {null, null, null, null, null, null},
+                {null, null, null, null, null, null},
+                {null, null, null, null, null, null},
+                {null, null, null, null, null, null},
+                {null, null, null, null, null, null},
+                {null, null, null, null, null, null},
+                {null, null, null, null, null, null},
+                {null, null, null, null, null, null},
+                {null, null, null, null, null, null},
+                {null, null, null, null, null, null},
+                {null, null, null, null, null, null},
+                {null, null, null, null, null, null},
+                {null, null, null, null, null, null},
+                {null, null, null, null, null, null},
+                {null, null, null, null, null, null},
+                {null, null, null, null, null, null},
+                {null, null, null, null, null, null},
+                {null, null, null, null, null, null},
+                {null, null, null, null, null, null},
+                {null, null, null, null, null, null},
+                {null, null, null, null, null, null},
+                {null, null, null, null, null, null},
+                {null, null, null, null, null, null},
+                {null, null, null, null, null, null},
+                {null, null, null, null, null, null},
+                {null, null, null, null, null, null},
+                {null, null, null, null, null, null},
+                {null, null, null, null, null, null},
+                {null, null, null, null, null, null},
+                {null, null, null, null, null, null},
+                {null, null, null, null, null, null},
+                {null, null, null, null, null, null},
+                {null, null, null, null, null, null},
+                {null, null, null, null, null, null},
+                {null, null, null, null, null, null},
+                {null, null, null, null, null, null},
+                {null, null, null, null, null, null},
+                {null, null, null, null, null, null},
+                {null, null, null, null, null, null},
+                {null, null, null, null, null, null},
+                {null, null, null, null, null, null},
+                {null, null, null, null, null, null},
+                {null, null, null, null, null, null},
+                {null, null, null, null, null, null},
+                {null, null, null, null, null, null},
+                {null, null, null, null, null, null},
+                {null, null, null, null, null, null},
+                {null, null, null, null, null, null},
+                {null, null, null, null, null, null},
+                {null, null, null, null, null, null},
+                {null, null, null, null, null, null},
+                {null, null, null, null, null, null},
+                {null, null, null, null, null, null},
+                {null, null, null, null, null, null},
+                {null, null, null, null, null, null},
+                {null, null, null, null, null, null},
+                {null, null, null, null, null, null},
+                {null, null, null, null, null, null},
+                {null, null, null, null, null, null},
+                {null, null, null, null, null, null},
+                {null, null, null, null, null, null},
+                {null, null, null, null, null, null},
+                {null, null, null, null, null, null},
+                {null, null, null, null, null, null},
+                {null, null, null, null, null, null},
+                {null, null, null, null, null, null},
+                {null, null, null, null, null, null},
+                {null, null, null, null, null, null},
+                {null, null, null, null, null, null},
+                {null, null, null, null, null, null},
+                {null, null, null, null, null, null},
+                {null, null, null, null, null, null},
+                {null, null, null, null, null, null},
+                {null, null, null, null, null, null},
+                {null, null, null, null, null, null},
+                {null, null, null, null, null, null},
+                {null, null, null, null, null, null},
+                {null, null, null, null, null, null},
+                {null, null, null, null, null, null},
+                {null, null, null, null, null, null},
+                {null, null, null, null, null, null},
+                {null, null, null, null, null, null},
+                {null, null, null, null, null, null},
+                {null, null, null, null, null, null},
+                {null, null, null, null, null, null},
+                {null, null, null, null, null, null},
+                {null, null, null, null, null, null},
+                {null, null, null, null, null, null},
+                {null, null, null, null, null, null},
+                {null, null, null, null, null, null},
+                {null, null, null, null, null, null},
+                {null, null, null, null, null, null},
+                {null, null, null, null, null, null},
+                {null, null, null, null, null, null},
+                {null, null, null, null, null, null},
+                {null, null, null, null, null, null},
+                {null, null, null, null, null, null},
+                {null, null, null, null, null, null},
+                {null, null, null, null, null, null},
+                {null, null, null, null, null, null},
+                {null, null, null, null, null, null},
+                {null, null, null, null, null, null},
+                {null, null, null, null, null, null},
+                {null, null, null, null, null, null},
+                {null, null, null, null, null, null},
+                {null, null, null, null, null, null},
+                {null, null, null, null, null, null},
+                {null, null, null, null, null, null},
+                {null, null, null, null, null, null},
+                {null, null, null, null, null, null},
+                {null, null, null, null, null, null},
+                {null, null, null, null, null, null},
+                {null, null, null, null, null, null},
+                {null, null, null, null, null, null},
+                {null, null, null, null, null, null},
+                {null, null, null, null, null, null},
+                {null, null, null, null, null, null},
+                {null, null, null, null, null, null},
+                {null, null, null, null, null, null},
+                {null, null, null, null, null, null},
+                {null, null, null, null, null, null}
+            },
+            new String [] {
+                "Slot Num.", "Name", "Contact", "FB Name", "Due date", "status"
+            }
+        ) {
+            boolean[] canEdit = new boolean [] {
+                false, false, false, false, false, true
+            };
+
+            public boolean isCellEditable(int rowIndex, int columnIndex) {
+                return canEdit [columnIndex];
+            }
+        });
+        jScrollPane1.setViewportView(jTable1);
+
+        jPanel4.add(jScrollPane1, new org.netbeans.lib.awtextra.AbsoluteConstraints(0, 0, 880, 450));
+
+        jPanel3.add(jPanel4, new org.netbeans.lib.awtextra.AbsoluteConstraints(310, 110, 880, -1));
+
+        jButton1.setBackground(new java.awt.Color(0, 204, 204));
+        jButton1.setFont(new java.awt.Font("Segoe UI Black", 0, 12)); // NOI18N
+        jButton1.setForeground(new java.awt.Color(255, 255, 255));
+        jButton1.setText("LIST OF CUSTOMER ");
+        jButton1.addActionListener(new java.awt.event.ActionListener() {
+            public void actionPerformed(java.awt.event.ActionEvent evt) {
+                jButton1ActionPerformed(evt);
+            }
+        });
+        jPanel3.add(jButton1, new org.netbeans.lib.awtextra.AbsoluteConstraints(40, 250, 220, 70));
+
+        txtSearch.addActionListener(new java.awt.event.ActionListener() {
+            public void actionPerformed(java.awt.event.ActionEvent evt) {
+                txtSearchActionPerformed(evt);
+            }
+        });
+        jPanel3.add(txtSearch, new org.netbeans.lib.awtextra.AbsoluteConstraints(830, 60, 170, 30));
+
+        btnSearch.setText("SEARCH");
+        btnSearch.addActionListener(new java.awt.event.ActionListener() {
+            public void actionPerformed(java.awt.event.ActionEvent evt) {
+                btnSearchActionPerformed(evt);
+            }
+        });
+        jPanel3.add(btnSearch, new org.netbeans.lib.awtextra.AbsoluteConstraints(1010, 60, 80, 30));
+
+        jLabel1.setIcon(new javax.swing.ImageIcon(getClass().getResource("/images/download-removebg-preview (1).png"))); // NOI18N
+        jPanel3.add(jLabel1, new org.netbeans.lib.awtextra.AbsoluteConstraints(20, 10, 240, 130));
+
+        jButton6.setFont(new java.awt.Font("Segoe UI Black", 0, 12)); // NOI18N
+        jButton6.setForeground(new java.awt.Color(0, 153, 255));
+        jButton6.setText("BACK");
+        jButton6.addActionListener(new java.awt.event.ActionListener() {
+            public void actionPerformed(java.awt.event.ActionEvent evt) {
+                jButton6ActionPerformed(evt);
+            }
+        });
+        jPanel3.add(jButton6, new org.netbeans.lib.awtextra.AbsoluteConstraints(40, 530, 220, 70));
+
+        jButton2.setText("Update");
+        jButton2.addActionListener(new java.awt.event.ActionListener() {
+            public void actionPerformed(java.awt.event.ActionEvent evt) {
+                jButton2ActionPerformed(evt);
+            }
+        });
+        jPanel3.add(jButton2, new org.netbeans.lib.awtextra.AbsoluteConstraints(650, 580, -1, -1));
+
+        jButton3.setFont(new java.awt.Font("Segoe UI Black", 0, 12)); // NOI18N
+        jButton3.setForeground(new java.awt.Color(0, 153, 255));
+        jButton3.setText("REGISTER");
+        jButton3.addActionListener(new java.awt.event.ActionListener() {
+            public void actionPerformed(java.awt.event.ActionEvent evt) {
+                jButton3ActionPerformed(evt);
+            }
+        });
+        jPanel3.add(jButton3, new org.netbeans.lib.awtextra.AbsoluteConstraints(40, 170, 220, 70));
+
+        jButton4.setFont(new java.awt.Font("Segoe UI Black", 0, 12)); // NOI18N
+        jButton4.setForeground(new java.awt.Color(0, 153, 204));
+        jButton4.setText("Payment");
+        jButton4.addActionListener(new java.awt.event.ActionListener() {
+            public void actionPerformed(java.awt.event.ActionEvent evt) {
+                jButton4ActionPerformed(evt);
+            }
+        });
+        jPanel3.add(jButton4, new org.netbeans.lib.awtextra.AbsoluteConstraints(40, 340, 220, 70));
+
+        jButton5.setText("DELETE");
+        jButton5.addActionListener(new java.awt.event.ActionListener() {
+            public void actionPerformed(java.awt.event.ActionEvent evt) {
+                jButton5ActionPerformed(evt);
+            }
+        });
+        jPanel3.add(jButton5, new org.netbeans.lib.awtextra.AbsoluteConstraints(360, 580, -1, -1));
+
+        jButton9.setFont(new java.awt.Font("Segoe UI Black", 0, 12)); // NOI18N
+        jButton9.setForeground(new java.awt.Color(0, 153, 204));
+        jButton9.setText("History");
+        jButton9.addActionListener(new java.awt.event.ActionListener() {
+            public void actionPerformed(java.awt.event.ActionEvent evt) {
+                jButton9ActionPerformed(evt);
+            }
+        });
+        jPanel3.add(jButton9, new org.netbeans.lib.awtextra.AbsoluteConstraints(40, 440, 220, 70));
+
+        javax.swing.GroupLayout layout = new javax.swing.GroupLayout(getContentPane());
+        getContentPane().setLayout(layout);
+        layout.setHorizontalGroup(
+            layout.createParallelGroup(javax.swing.GroupLayout.Alignment.LEADING)
+            .addGroup(javax.swing.GroupLayout.Alignment.TRAILING, layout.createSequentialGroup()
+                .addComponent(jPanel3, javax.swing.GroupLayout.PREFERRED_SIZE, 1424, javax.swing.GroupLayout.PREFERRED_SIZE)
+                .addGap(0, 0, Short.MAX_VALUE))
+        );
+        layout.setVerticalGroup(
+            layout.createParallelGroup(javax.swing.GroupLayout.Alignment.LEADING)
+            .addGroup(layout.createSequentialGroup()
+                .addContainerGap()
+                .addComponent(jPanel3, javax.swing.GroupLayout.PREFERRED_SIZE, 872, javax.swing.GroupLayout.PREFERRED_SIZE)
+                .addContainerGap(javax.swing.GroupLayout.DEFAULT_SIZE, Short.MAX_VALUE))
+        );
+
+        pack();
+    }// </editor-fold>                        
+
+   private void loadTableData() {
+      try (Connection conn = DriverManager.getConnection(DB_URL, DB_USER, DB_PASSWORD)) {
+      String sql = "SELECT SlotNum, Name, ContactNumber, Gmail, NextDueDate, status FROM clientdata "
+           + "ORDER BY CASE WHEN status='inactive' THEN 0 ELSE 1 END ASC, CAST(SlotNum AS UNSIGNED)";
+            PreparedStatement pst = conn.prepareStatement(sql);
+            ResultSet rs = pst.executeQuery();
+
+            DefaultTableModel model = (DefaultTableModel) jTable1.getModel();
+            int previousRowCount = model.getRowCount();
+            model.setRowCount(0);
+
+            int rowCount = 0;
+            while (rs.next()) {
+               model.addRow(new Object[]{
+    rs.getString("SlotNum"),
+    rs.getString("Name"),
+    rs.getString("ContactNumber"),
+    rs.getString("Gmail"),
+    rs.getString("NextDueDate"),
+    rs.getString("status")
+});
+                rowCount++;
+            }
+
+            sorter = new TableRowSorter<>(model);
+            jTable1.setRowSorter(sorter);
+
+            sorter.setComparator(5, (o1, o2) -> {
+                String s1 = o1.toString().toLowerCase();
+                String s2 = o2.toString().toLowerCase();
+                if (s1.equals("inactive") && !s2.equals("inactive")) return -1;
+                if (!s1.equals("inactive") && s2.equals("inactive")) return 1;
+                return s1.compareTo(s2);
+            });
+
+            List<RowSorter.SortKey> sortKeys = new ArrayList<>();
+            sortKeys.add(new RowSorter.SortKey(5, javax.swing.SortOrder.ASCENDING));
+            sorter.setSortKeys(sortKeys);
+
+            if (previousRowCount > 0) {
+                History.logHistory("REFRESH", null, null, currentUser, "SUCCESS",
+                    "Customer list refreshed. Total records: " + rowCount);
+            }
+        } catch (Exception ex) {
+            JOptionPane.showMessageDialog(this, "Error loading data: " + ex.getMessage());
+            History.logError("LOAD_DATA", currentUser, "Failed to load table data: " + ex.getMessage());
+            ex.printStackTrace();
+        }
+}
+
+    
+    private void jButton1ActionPerformed(java.awt.event.ActionEvent evt) {                                         
+         adminlist frame = new adminlist(currentUser);
+        frame.setLocationRelativeTo(null);
+        frame.setVisible(true);
+        dispose();
+    }                                        
+
+    private void txtSearchActionPerformed(java.awt.event.ActionEvent evt) {                                          
+       btnSearchActionPerformed(evt);
+    }                                         
+
+    private void btnSearchActionPerformed(java.awt.event.ActionEvent evt) {                                          
+                                      
+    String text = txtSearch.getText().trim();
+    if (text.length() == 0) {
+        sorter.setRowFilter(null);
+        History.logHistory("SEARCH", null, null, currentUser, "SUCCESS", "Search cleared");
+    } else {
+        // Only search Slot Num (col 0) and Name (col 1)
+        sorter.setRowFilter(RowFilter.regexFilter("(?i)" + text, 0, 1));
+        int resultsCount = jTable1.getRowCount();
+        History.logSearch(currentUser, text, String.valueOf(resultsCount));
+    }
+    }                                         
+
+    private void jButton6ActionPerformed(java.awt.event.ActionEvent evt) {                                         
+       ownerlogin frame = new ownerlogin();
+        frame.setLocationRelativeTo(null);
+        frame.setVisible(true);
+        dispose();
+    }                                        
+
+    private void jButton2ActionPerformed(java.awt.event.ActionEvent evt) {                                         
+                                        
+        int selectedRow = jTable1.getSelectedRow();
+        if (selectedRow == -1) {
+            JOptionPane.showMessageDialog(this, "Please select a row to update.", "Error", JOptionPane.WARNING_MESSAGE);
+            return;
+        }
+        DefaultTableModel model = (DefaultTableModel) jTable1.getModel();
+        int modelRow    = jTable1.convertRowIndexToModel(selectedRow);
+        String slotNum  = model.getValueAt(modelRow, 0).toString();
+        String custName = model.getValueAt(modelRow, 1).toString();
+        History.logHistory("UPDATE_OPEN", slotNum, custName, currentUser, "SUCCESS", "Opened update dialog");
+        showUpdateDialog(slotNum);
+    }
+
+   private void showUpdateDialog(String slotNum) {
+    JDialog updateDialog = new JDialog(this, "Update Customer - Slot #" + slotNum, true);
+    updateDialog.setSize(550, 620);
+    updateDialog.setLocationRelativeTo(this);
+    updateDialog.setLayout(new BorderLayout(10, 10));
+    updateDialog.getContentPane().setBackground(new Color(0, 153, 204));
+
+    String currentName = "", currentContact = "", currentAddress = "",
+           currentFB = "", currentPlanRate = "";
+    byte[] currentImageBytes = null;
+    final String[] currentStatusHolder = { "" }; 
+
+    try (Connection conn = DriverManager.getConnection(DB_URL, DB_USER, DB_PASSWORD)) {
+        PreparedStatement pst = conn.prepareStatement(
+            "SELECT Name, ContactNumber, Address, Gmail, status, PlanRate, IDPicture FROM clientdata WHERE SlotNum = ?");
+        pst.setString(1, slotNum);
+        ResultSet rs = pst.executeQuery();
+        if (rs.next()) {
+            currentName     = rs.getString("Name");
+            currentContact  = rs.getString("ContactNumber");
+            currentAddress  = rs.getString("Address");
+            currentFB       = rs.getString("Gmail");
+          currentStatusHolder[0] = rs.getString("status");
+            currentPlanRate = rs.getString("PlanRate");
+            currentImageBytes = rs.getBytes("IDPicture");
+        }
+    } catch (Exception ex) {
+        JOptionPane.showMessageDialog(this, "Error loading customer data: " + ex.getMessage());
+        return;
+    }
+
+    // ── FORM PANEL ──────────────────────────────────────────────────────────
+    JPanel formPanel = new JPanel(new GridLayout(6, 2, 10, 10));
+    formPanel.setBackground(new Color(0, 180, 215));
+    formPanel.setBorder(BorderFactory.createEmptyBorder(20, 20, 10, 20));
+
+    JTextField txtName    = new JTextField(currentName);
+    JTextField txtContact = new JTextField(currentContact);
+    JTextField txtAddress = new JTextField(currentAddress);
+    JTextField txtFB      = new JTextField(currentFB);
+
+    javax.swing.JComboBox<String> cmbStatus = new javax.swing.JComboBox<>(new String[]{"active", "inactive"});
+    cmbStatus.setSelectedItem(currentStatusHolder[0]);
+
+    javax.swing.JComboBox<String> cmbPlan = new javax.swing.JComboBox<>(
+        new String[]{"699","799","999","1299","1399","1499","1599","1999"});
+    cmbPlan.setSelectedItem(currentPlanRate);
+
+    formPanel.add(createLabel("Name:"));               formPanel.add(txtName);
+    formPanel.add(createLabel("Contact Number:"));     formPanel.add(txtContact);
+    formPanel.add(createLabel("Address:"));            formPanel.add(txtAddress);
+    formPanel.add(createLabel("Facebook/Messenger:")); formPanel.add(txtFB);
+    formPanel.add(createLabel("Status:"));             formPanel.add(cmbStatus);
+    formPanel.add(createLabel("Plan Rate:"));          formPanel.add(cmbPlan);
+
+    // ── IMAGE PANEL ──────────────────────────────────────────────────────────
+    JPanel imagePanel = new JPanel(new BorderLayout(5, 5));
+    imagePanel.setBackground(new Color(0, 180, 215));
+    imagePanel.setBorder(BorderFactory.createCompoundBorder(
+        BorderFactory.createEmptyBorder(0, 20, 10, 20),
+        BorderFactory.createLineBorder(Color.WHITE, 1)
+    ));
+
+    JLabel imgTitleLbl = new JLabel("  ID PICTURE", JLabel.LEFT);
+    imgTitleLbl.setFont(new Font("Segoe UI Black", Font.BOLD, 12));
+    imgTitleLbl.setForeground(Color.WHITE);
+    imgTitleLbl.setOpaque(true);
+    imgTitleLbl.setBackground(new Color(0, 130, 180));
+    imgTitleLbl.setBorder(BorderFactory.createEmptyBorder(4, 6, 4, 6));
+
+    JLabel previewLabel = new JLabel("No Image", JLabel.CENTER);
+    previewLabel.setPreferredSize(new Dimension(0, 110));
+    previewLabel.setOpaque(true);
+    previewLabel.setBackground(Color.BLACK);
+    previewLabel.setForeground(Color.GRAY);
+    previewLabel.setFont(new Font("Segoe UI", Font.PLAIN, 12));
+
+    // [0] = bytes to save (null = clear from DB), [1] = sentinel: "KEEP" / "CLEAR"
+    final byte[][] newImageBytes  = { currentImageBytes };
+    final String[] imageAction    = { "KEEP" }; // KEEP | NEW | CLEAR
+
+    // Load current image into preview
+    if (currentImageBytes != null && currentImageBytes.length > 0) {
+        try {
+            java.awt.image.BufferedImage img = javax.imageio.ImageIO.read(
+                new ByteArrayInputStream(currentImageBytes));
+            if (img != null) {
+                previewLabel.setIcon(new ImageIcon(img.getScaledInstance(160, 100, Image.SCALE_SMOOTH)));
+                previewLabel.setText("");
+            }
+        } catch (Exception ignored) {}
+    }
+
+
+    JPanel imgBtnRow = new JPanel(new java.awt.FlowLayout(java.awt.FlowLayout.LEFT, 8, 6));
+    imgBtnRow.setBackground(new Color(0, 180, 215));
+
+    JButton chooseImgBtn = new JButton("📁 Choose Image");
+    chooseImgBtn.setFont(new Font("Segoe UI", Font.BOLD, 11));
+    chooseImgBtn.setBackground(new Color(0, 102, 204));
+    chooseImgBtn.setForeground(Color.WHITE);
+    chooseImgBtn.setFocusPainted(false);
+    chooseImgBtn.setCursor(new Cursor(Cursor.HAND_CURSOR));
+
+    JButton clearImgBtn = new JButton("✕ Clear");
+    clearImgBtn.setFont(new Font("Segoe UI", Font.BOLD, 11));
+    clearImgBtn.setBackground(new Color(180, 80, 0));
+    clearImgBtn.setForeground(Color.WHITE);
+    clearImgBtn.setFocusPainted(false);
+    clearImgBtn.setCursor(new Cursor(Cursor.HAND_CURSOR));
+    clearImgBtn.setToolTipText("Discard newly selected image and revert to current");
+
+    JButton deleteImgBtn = new JButton("🗑 Delete Image");
+    deleteImgBtn.setFont(new Font("Segoe UI", Font.BOLD, 11));
+    deleteImgBtn.setBackground(new Color(180, 0, 0));
+    deleteImgBtn.setForeground(Color.WHITE);
+    deleteImgBtn.setFocusPainted(false);
+    deleteImgBtn.setCursor(new Cursor(Cursor.HAND_CURSOR));
+    deleteImgBtn.setToolTipText("Permanently remove the ID picture from the database");
+    // Disable if there's no image stored
+    deleteImgBtn.setEnabled(currentImageBytes != null && currentImageBytes.length > 0);
+
+    JLabel imgStatusLbl = new JLabel(
+        currentImageBytes != null && currentImageBytes.length > 0 ? "Current image loaded" : "No image");
+    imgStatusLbl.setFont(new Font("Segoe UI", Font.ITALIC, 10));
+    imgStatusLbl.setForeground(new Color(220, 240, 255));
+
+    
+    chooseImgBtn.addActionListener(e -> {
+        javax.swing.JFileChooser fc = new javax.swing.JFileChooser();
+        fc.setFileFilter(new javax.swing.filechooser.FileNameExtensionFilter(
+            "Image Files", "jpg", "jpeg", "png", "gif", "bmp"));
+        if (fc.showOpenDialog(updateDialog) == javax.swing.JFileChooser.APPROVE_OPTION) {
+            try {
+                java.io.File file = fc.getSelectedFile();
+                byte[] bytes = Files.readAllBytes(file.toPath());
+                java.awt.image.BufferedImage img = javax.imageio.ImageIO.read(file);
+                if (img != null) {
+                    previewLabel.setIcon(new ImageIcon(img.getScaledInstance(160, 100, Image.SCALE_SMOOTH)));
+                    previewLabel.setText("");
+                }
+                newImageBytes[0] = bytes;
+                imageAction[0]   = "NEW";
+                imgStatusLbl.setText("✓ New image: " + file.getName());
+                imgStatusLbl.setForeground(new Color(180, 255, 180));
+                deleteImgBtn.setEnabled(false); // can't delete if replacing
+            } catch (Exception ex) {
+                JOptionPane.showMessageDialog(updateDialog, "Error loading image: " + ex.getMessage());
+            }
+        }
+    });
+
+   
+final byte[] originalImageBytes = currentImageBytes; 
+
+clearImgBtn.addActionListener(e -> {
+    newImageBytes[0] = originalImageBytes;            
+    imageAction[0]   = "KEEP";
+    
+    previewLabel.setIcon(null);
+    previewLabel.setText("No Image");
+    if (originalImageBytes != null && originalImageBytes.length > 0) {
+        try {
+            java.awt.image.BufferedImage img = javax.imageio.ImageIO.read(
+                new ByteArrayInputStream(originalImageBytes));
+            if (img != null) {
+                previewLabel.setIcon(new ImageIcon(img.getScaledInstance(160, 100, Image.SCALE_SMOOTH)));
+                previewLabel.setText("");
+            }
+        } catch (Exception ignored) {}
+        imgStatusLbl.setText("Reverted to current image");
+        deleteImgBtn.setEnabled(true);
+    } else {
+        imgStatusLbl.setText("No image");
+        deleteImgBtn.setEnabled(false);
+    }
+    imgStatusLbl.setForeground(new Color(220, 240, 255));
+});
+
+    
+    deleteImgBtn.addActionListener(e -> {
+        int confirm = JOptionPane.showConfirmDialog(updateDialog,
+            "Are you sure you want to permanently delete the ID picture?\nThis cannot be undone.",
+            "Confirm Delete Image",
+            JOptionPane.YES_NO_OPTION,
+            JOptionPane.WARNING_MESSAGE);
+        if (confirm == JOptionPane.YES_OPTION) {
+            newImageBytes[0] = null;
+            imageAction[0]   = "CLEAR";
+            previewLabel.setIcon(null);
+            previewLabel.setText("Image will be deleted on save");
+            previewLabel.setForeground(new Color(255, 120, 120));
+            imgStatusLbl.setText("⚠ Image marked for deletion");
+            imgStatusLbl.setForeground(new Color(255, 180, 180));
+            deleteImgBtn.setEnabled(false);
+            chooseImgBtn.setEnabled(true);
+        }
+    });
+
+    imgBtnRow.add(chooseImgBtn);
+    imgBtnRow.add(clearImgBtn);
+    imgBtnRow.add(deleteImgBtn);
+    imgBtnRow.add(imgStatusLbl);
+
+    imagePanel.add(imgTitleLbl,  BorderLayout.NORTH);
+    imagePanel.add(previewLabel, BorderLayout.CENTER);
+    imagePanel.add(imgBtnRow,    BorderLayout.SOUTH);
+
+    
+    JPanel centerPanel = new JPanel(new BorderLayout());
+    centerPanel.setBackground(new Color(0, 180, 215));
+    centerPanel.add(formPanel,  BorderLayout.NORTH);
+    centerPanel.add(imagePanel, BorderLayout.CENTER);
+
+    
+    JPanel btnPanel = new JPanel();
+    btnPanel.setBackground(new Color(0, 153, 204));
+    btnPanel.setBorder(BorderFactory.createEmptyBorder(8, 0, 8, 0));
+
+    JButton saveBtn = new JButton("SAVE CHANGES");
+    saveBtn.setBackground(new Color(0, 204, 102));
+    saveBtn.setForeground(Color.WHITE);
+    saveBtn.setFont(new Font("Segoe UI Black", Font.BOLD, 12));
+    saveBtn.setPreferredSize(new Dimension(150, 40));
+
+   JButton cancelBtn = new JButton("CANCEL");
+    cancelBtn.setBackground(new Color(204, 0, 0));
+    cancelBtn.setForeground(Color.WHITE);
+    cancelBtn.setFont(new Font("Segoe UI Black", Font.BOLD, 12));
+    cancelBtn.setPreferredSize(new Dimension(120, 40));
+    cancelBtn.addActionListener(e -> updateDialog.dispose());  
+
+
+ saveBtn.addActionListener(e -> {
+    if (txtName.getText().trim().isEmpty()) {
+        JOptionPane.showMessageDialog(updateDialog,
+            "Name cannot be empty!", "Validation Error", JOptionPane.WARNING_MESSAGE);
+        return;
+    }
+
+    
+   if ("active".equals(cmbStatus.getSelectedItem().toString())
+            && "inactive".equals(currentStatusHolder[0])) {
+        int choice = JOptionPane.showConfirmDialog(updateDialog,
+            "Are you sure you want to activate this customer?",
+            "Activate Customer",
+            JOptionPane.YES_NO_OPTION,
+            JOptionPane.QUESTION_MESSAGE);
+        if (choice != JOptionPane.YES_OPTION) {
+            return;
+        }
+    }
+
+    try (Connection conn = DriverManager.getConnection(DB_URL, DB_USER, DB_PASSWORD)) {
+        PreparedStatement pst;
+        String logNote;
+
+        switch (imageAction[0]) {
+            case "NEW":
+                pst = conn.prepareStatement(
+                    "UPDATE clientdata SET Name=?, ContactNumber=?, Address=?, Gmail=?, " +
+                    "status=?, PlanRate=?, IDPicture=? WHERE SlotNum=?");
+                pst.setString(1, txtName.getText().trim());
+                pst.setString(2, txtContact.getText().trim());
+                pst.setString(3, txtAddress.getText().trim());
+                pst.setString(4, txtFB.getText().trim());
+                pst.setString(5, cmbStatus.getSelectedItem().toString());
+                pst.setString(6, cmbPlan.getSelectedItem().toString());
+                pst.setBytes(7, newImageBytes[0]);
+                pst.setString(8, slotNum);
+                logNote = "Updated customer details + replaced image";
+                break;
+
+            case "CLEAR":
+                pst = conn.prepareStatement(
+                    "UPDATE clientdata SET Name=?, ContactNumber=?, Address=?, Gmail=?, " +
+                    "status=?, PlanRate=?, IDPicture=NULL WHERE SlotNum=?");
+                pst.setString(1, txtName.getText().trim());
+                pst.setString(2, txtContact.getText().trim());
+                pst.setString(3, txtAddress.getText().trim());
+                pst.setString(4, txtFB.getText().trim());
+                pst.setString(5, cmbStatus.getSelectedItem().toString());
+                pst.setString(6, cmbPlan.getSelectedItem().toString());
+                pst.setString(7, slotNum);
+                logNote = "Updated customer details + deleted image";
+                break;
+
+            default: // "KEEP"
+                pst = conn.prepareStatement(
+                    "UPDATE clientdata SET Name=?, ContactNumber=?, Address=?, Gmail=?, " +
+                    "status=?, PlanRate=? WHERE SlotNum=?");
+                pst.setString(1, txtName.getText().trim());
+                pst.setString(2, txtContact.getText().trim());
+                pst.setString(3, txtAddress.getText().trim());
+                pst.setString(4, txtFB.getText().trim());
+                pst.setString(5, cmbStatus.getSelectedItem().toString());
+                pst.setString(6, cmbPlan.getSelectedItem().toString());
+                pst.setString(7, slotNum);
+                logNote = "Updated customer details";
+                break;
+        }
+
+        int updated = pst.executeUpdate();
+        if (updated > 0) {
+            History.logHistory("UPDATE", slotNum, txtName.getText().trim(),
+                currentUser, "SUCCESS", logNote);
+            JOptionPane.showMessageDialog(updateDialog, "Customer updated successfully!");
+            updateDialog.dispose();
+            loadTableData();
+        }
+    } catch (Exception ex) {
+        JOptionPane.showMessageDialog(updateDialog, "Error updating: " + ex.getMessage());
+        History.logError("UPDATE", currentUser,
+            "Failed to update slot " + slotNum + ": " + ex.getMessage());
+    }
+});
+ btnPanel.add(saveBtn);
+    btnPanel.add(cancelBtn);
+    updateDialog.add(centerPanel, BorderLayout.CENTER);
+    updateDialog.add(btnPanel, BorderLayout.SOUTH);
+    updateDialog.setVisible(true);
+
+    }                                        
+
+    private void jButton3ActionPerformed(java.awt.event.ActionEvent evt) {                                         
+         adminhome frame = new adminhome();
+        frame.setLocationRelativeTo(null);
+        frame.setVisible(true);
+        dispose();
+    }                                        
+
+    private void jButton4ActionPerformed(java.awt.event.ActionEvent evt) {                                         
+           adminpayment frame = new adminpayment();
+        frame.setLocationRelativeTo(null);
+        frame.setVisible(true);
+        dispose();
+    }                                        
+
+    private void jButton5ActionPerformed(java.awt.event.ActionEvent evt) {                                         
+      int selectedRow = jTable1.getSelectedRow();
+        if (selectedRow == -1) {
+            JOptionPane.showMessageDialog(this, "Please select a row to delete.", "Error", JOptionPane.ERROR_MESSAGE);
+            return;
+        }
+        DefaultTableModel model = (DefaultTableModel) jTable1.getModel();
+        int modelRow   = jTable1.convertRowIndexToModel(selectedRow);
+        String slotNum = model.getValueAt(modelRow, 0).toString();
+        String name    = model.getValueAt(modelRow, 1).toString();
+        String contact = model.getValueAt(modelRow, 2).toString();
+        String email   = model.getValueAt(modelRow, 3).toString();
+
+        int confirm = JOptionPane.showConfirmDialog(this,
+            "Are you sure you want to delete: " + name + " (Slot " + slotNum + ")?",
+            "Confirm Deletion", JOptionPane.YES_NO_OPTION);
+
+        if (confirm == JOptionPane.YES_OPTION) {
+              try (Connection con = DriverManager.getConnection(DB_URL, DB_USER, DB_PASSWORD);
+     PreparedStatement pst = con.prepareStatement("DELETE FROM clientdata WHERE SlotNum = ?")) {
+    pst.setString(1, slotNum);
+    int deletedRows = pst.executeUpdate();
+    if (deletedRows > 0) {
+        History.logDelete(slotNum, name, currentUser, "Contact: " + contact + " | Email: " + email);
+        model.removeRow(modelRow);
+        JOptionPane.showMessageDialog(this, "Record deleted successfully!");
+    } else {
+        JOptionPane.showMessageDialog(this, "Record not found.", "Error", JOptionPane.ERROR_MESSAGE);
+        History.logError("DELETE", currentUser, "Record not found for slot " + slotNum);
+    }
+} catch (Exception e) {
+                JOptionPane.showMessageDialog(this, "Error while deleting: " + e.getMessage(), "Error", JOptionPane.ERROR_MESSAGE);
+                History.logError("DELETE", currentUser, "Error deleting slot " + slotNum + ": " + e.getMessage());
+                e.printStackTrace();
+            }
+        } else {
+            History.logHistory("DELETE_CANCELLED", slotNum, name, currentUser, "INFO", "User cancelled deletion");
+        }
+    }                                        
+
+    private void jButton9ActionPerformed(java.awt.event.ActionEvent evt) {                                         
+      History frame = new History();
+        frame.setLocationRelativeTo(null);
+        frame.setVisible(true);
+        dispose();
+    }                                        
+
+    
+   public static void main(String args[]) {
+        try {
+            for (javax.swing.UIManager.LookAndFeelInfo info : javax.swing.UIManager.getInstalledLookAndFeels()) {
+                if ("Nimbus".equals(info.getName())) {
+                    javax.swing.UIManager.setLookAndFeel(info.getClassName());
+                    break;
+                }
+            }
+        } catch (ReflectiveOperationException | javax.swing.UnsupportedLookAndFeelException ex) {
+            logger.log(java.util.logging.Level.SEVERE, null, ex);
+        }
+
+        java.awt.EventQueue.invokeLater(() -> new adminlist().setVisible(true));
+    }
+
+
+    // Variables declaration - do not modify                     
+    private javax.swing.JButton btnSearch;
+    private javax.swing.JButton jButton1;
+    private javax.swing.JButton jButton2;
+    private javax.swing.JButton jButton3;
+    private javax.swing.JButton jButton4;
+    private javax.swing.JButton jButton5;
+    private javax.swing.JButton jButton6;
+    private javax.swing.JButton jButton9;
+    private javax.swing.JLabel jLabel1;
+    private javax.swing.JLabel jLabel9;
+    private javax.swing.JPanel jPanel3;
+    private javax.swing.JPanel jPanel4;
+    private javax.swing.JScrollPane jScrollPane1;
+    private javax.swing.JTable jTable1;
+    private javax.swing.JTextField txtSearch;
+    // End of variables declaration                   
+}
