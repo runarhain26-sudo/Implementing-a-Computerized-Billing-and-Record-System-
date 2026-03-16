@@ -1,0 +1,1108 @@
+package newpackage;
+
+import java.io.File;
+import java.io.FileInputStream;
+import java.sql.Connection;
+import java.sql.DriverManager;
+import java.sql.PreparedStatement;
+import java.sql.ResultSet;
+import java.sql.SQLException;
+import java.text.SimpleDateFormat;
+import java.util.ArrayList;
+import java.util.Date;
+import java.util.List;
+import javax.swing.JFileChooser;
+import javax.swing.JOptionPane;
+import javax.swing.filechooser.FileNameExtensionFilter;
+import javax.swing.text.AbstractDocument;
+import javax.swing.text.AttributeSet;
+import javax.swing.text.BadLocationException;
+import javax.swing.text.DocumentFilter;
+/**
+ *
+ * @author rhain
+ */
+public class adminhome extends javax.swing.JFrame {
+    
+    private static final java.util.logging.Logger logger = java.util.logging.Logger.getLogger(adminhome.class.getName());
+    private String selectedImagePath = null;
+    private String selectedIDPath = null;
+    private String currentUser = "Admin"; 
+    
+    public adminhome() {
+        initComponents();
+        setCurrentDate();
+        setupInputFilters();
+        showAvailableSlots();
+        q.setEditable(false);  
+        
+        choice1.add("699");
+        choice1.add("799");
+        choice1.add("999");
+        choice1.add("1299");
+        choice1.add("1399");
+        choice1.add("1499");
+        choice1.add("1599");
+        choice1.add("1999");
+    }
+    
+    public adminhome(String username) {
+        this.currentUser = username;
+        initComponents();
+        setCurrentDate();
+        setupInputFilters();
+        showAvailableSlots();
+        q.setEditable(false);
+        
+        choice1.add("699");
+        choice1.add("799");
+        choice1.add("999");
+        choice1.add("1299");
+        choice1.add("1399");
+        choice1.add("1499");
+        choice1.add("1599");
+        choice1.add("1999");
+    }
+
+    private void setupInputFilters() {
+        ((AbstractDocument) q1.getDocument()).setDocumentFilter(new DocumentFilter() {
+            private static final int MAX_LENGTH = 11;
+            
+            @Override
+            public void insertString(FilterBypass fb, int offset, String string, AttributeSet attr) throws BadLocationException {
+                StringBuilder sb = new StringBuilder();
+                for (char c : string.toCharArray()) {
+                    if (Character.isDigit(c) && fb.getDocument().getLength() + sb.length() < MAX_LENGTH) {
+                        sb.append(c);
+                    }
+                }
+                super.insertString(fb, offset, sb.toString(), attr);
+            }
+            
+            @Override
+            public void replace(FilterBypass fb, int offset, int length, String text, AttributeSet attrs) throws BadLocationException {
+                StringBuilder sb = new StringBuilder();
+                for (char c : text.toCharArray()) {
+                    if (Character.isDigit(c) && fb.getDocument().getLength() - length + sb.length() < MAX_LENGTH) {
+                        sb.append(c);
+                    }
+                }
+                super.replace(fb, offset, length, sb.toString(), attrs);
+            }
+        });
+    }
+
+    private void setCurrentDate() {
+        SimpleDateFormat sdf = new SimpleDateFormat("yyyy-MM-dd");
+        String currentDate = sdf.format(new Date());
+        s.setText(currentDate);
+        q.setText(currentUser);
+    }
+
+    private void showAvailableSlots() {
+        String url = "jdbc:mysql://localhost:3306/dbregister?zeroDateTimeBehavior=CONVERT_TO_NULL";
+        String user = "root";
+        String password = "";
+
+        try (Connection conn = DriverManager.getConnection(url, user, password)) {
+            String sql = "SELECT SlotNum FROM clientdata ORDER BY CAST(SlotNum AS UNSIGNED)";
+            PreparedStatement pstmt = conn.prepareStatement(sql);
+            ResultSet rs = pstmt.executeQuery();
+
+            List<Integer> occupiedSlots = new ArrayList<>();
+            int maxSlot = 0;
+            
+            while (rs.next()) {
+                int slotNum = Integer.parseInt(rs.getString("SlotNum"));
+                occupiedSlots.add(slotNum);
+                if (slotNum > maxSlot) maxSlot = slotNum;
+            }
+
+            List<Integer> freeSlots = new ArrayList<>();
+            int checkUpTo = 500;            
+            for (int i = 1; i <= checkUpTo; i++) {
+                if (!occupiedSlots.contains(i)) freeSlots.add(i);
+            }
+
+            if (freeSlots.isEmpty()) {
+                JOptionPane.showMessageDialog(this, 
+                    "No slots currently free. Next available slot: " + (maxSlot + 1),
+                    "Slot Information", JOptionPane.INFORMATION_MESSAGE);
+            } else {
+                StringBuilder message = new StringBuilder("Available Slots:\n\n");
+                for (int i = 0; i < Math.min(freeSlots.size(), 20); i++) {
+                    message.append(freeSlots.get(i));
+                    if (i < Math.min(freeSlots.size(), 20) - 1) message.append(", ");
+                    if ((i + 1) % 10 == 0) message.append("\n");
+                }
+                if (freeSlots.size() > 20) message.append("\n... and ").append(freeSlots.size() - 20).append(" more");
+                System.out.println(message.toString());
+            }
+        } catch (SQLException ex) {
+            JOptionPane.showMessageDialog(this, "Error checking slots: " + ex.getMessage());
+        }
+    }
+    
+    private boolean isSlotAvailable(String slotNum) {
+        String url = "jdbc:mysql://localhost:3306/dbregister?zeroDateTimeBehavior=CONVERT_TO_NULL";
+        String user = "root";
+        String password = "";
+
+        try (Connection conn = DriverManager.getConnection(url, user, password)) {
+            String sql = "SELECT COUNT(*) as count FROM clientdata WHERE SlotNum = ?";
+            PreparedStatement pstmt = conn.prepareStatement(sql);
+            pstmt.setString(1, slotNum);
+            ResultSet rs = pstmt.executeQuery();
+            if (rs.next()) return rs.getInt("count") == 0;
+        } catch (SQLException ex) {
+            JOptionPane.showMessageDialog(this, "Error: " + ex.getMessage());
+        }
+        return false;
+    }
+
+    private void clearFields() {
+        w.setText("");
+        d.setText("");
+        a.setText("");
+        q1.setText("");
+        q.setText(currentUser);
+        w2.setText("");
+    }
+    
+    /**
+     * This method is called from within the constructor to initialize the form.
+     * WARNING: Do NOT modify this code. The content of this method is always
+     * regenerated by the Form Editor.
+     */
+    
+    // <editor-fold defaultstate="collapsed" desc="Generated Code">                          
+    private void initComponents() {
+
+        jPanel1 = new javax.swing.JPanel();
+        jLabel7 = new javax.swing.JLabel();
+        jButton2 = new javax.swing.JButton();
+        jButton6 = new javax.swing.JButton();
+        jLabel1 = new javax.swing.JLabel();
+        jButton1 = new javax.swing.JButton();
+        jPanel2 = new javax.swing.JPanel();
+        name = new javax.swing.JLabel();
+        contact = new javax.swing.JLabel();
+        email = new javax.swing.JLabel();
+        date = new javax.swing.JLabel();
+        costumer = new javax.swing.JLabel();
+        w = new javax.swing.JTextField();
+        q = new javax.swing.JTextField();
+        s = new javax.swing.JTextField();
+        a = new javax.swing.JTextField();
+        d = new javax.swing.JTextField();
+        q1 = new javax.swing.JTextField();
+        name1 = new javax.swing.JLabel();
+        jButton7 = new javax.swing.JButton();
+        jButton8 = new javax.swing.JButton();
+        jButton10 = new javax.swing.JButton();
+        jButton11 = new javax.swing.JButton();
+        costumer1 = new javax.swing.JLabel();
+        costumer2 = new javax.swing.JLabel();
+        w2 = new javax.swing.JTextField();
+        choice1 = new java.awt.Choice();
+        jButton4 = new javax.swing.JButton();
+        jButton9 = new javax.swing.JButton();
+
+        setDefaultCloseOperation(javax.swing.WindowConstants.EXIT_ON_CLOSE);
+
+        jPanel1.setBackground(new java.awt.Color(0, 153, 255));
+        jPanel1.setLayout(new org.netbeans.lib.awtextra.AbsoluteLayout());
+
+        jLabel7.setFont(new java.awt.Font("Segoe UI Black", 0, 60)); // NOI18N
+        jLabel7.setForeground(new java.awt.Color(255, 255, 255));
+        jLabel7.setText("CUSTOMER REGISTER");
+        jPanel1.add(jLabel7, new org.netbeans.lib.awtextra.AbsoluteConstraints(560, 20, -1, -1));
+
+        jButton2.setBackground(new java.awt.Color(0, 204, 204));
+        jButton2.setFont(new java.awt.Font("Segoe UI Black", 0, 12)); // NOI18N
+        jButton2.setForeground(new java.awt.Color(255, 255, 255));
+        jButton2.setText("REGISTER");
+        jButton2.addActionListener(new java.awt.event.ActionListener() {
+            public void actionPerformed(java.awt.event.ActionEvent evt) {
+                jButton2ActionPerformed(evt);
+            }
+        });
+        jPanel1.add(jButton2, new org.netbeans.lib.awtextra.AbsoluteConstraints(40, 200, 220, 70));
+
+        jButton6.setFont(new java.awt.Font("Segoe UI Black", 0, 12)); // NOI18N
+        jButton6.setForeground(new java.awt.Color(0, 153, 255));
+        jButton6.setText("BACK");
+        jButton6.addActionListener(new java.awt.event.ActionListener() {
+            public void actionPerformed(java.awt.event.ActionEvent evt) {
+                jButton6ActionPerformed(evt);
+            }
+        });
+        jPanel1.add(jButton6, new org.netbeans.lib.awtextra.AbsoluteConstraints(40, 560, 220, 70));
+
+        jLabel1.setIcon(new javax.swing.ImageIcon(getClass().getResource("/images/download-removebg-preview (1).png"))); // NOI18N
+        jPanel1.add(jLabel1, new org.netbeans.lib.awtextra.AbsoluteConstraints(20, 20, 240, 130));
+
+        jButton1.setFont(new java.awt.Font("Segoe UI Black", 0, 12)); // NOI18N
+        jButton1.setForeground(new java.awt.Color(0, 153, 255));
+        jButton1.setText("LIST OF CUSTOMER ");
+        jButton1.addActionListener(new java.awt.event.ActionListener() {
+            public void actionPerformed(java.awt.event.ActionEvent evt) {
+                jButton1ActionPerformed(evt);
+            }
+        });
+        jPanel1.add(jButton1, new org.netbeans.lib.awtextra.AbsoluteConstraints(40, 290, 220, 70));
+
+        jPanel2.setBackground(new java.awt.Color(0, 153, 204));
+        jPanel2.setBorder(javax.swing.BorderFactory.createLineBorder(new java.awt.Color(255, 255, 255), 3));
+        jPanel2.setCursor(new java.awt.Cursor(java.awt.Cursor.DEFAULT_CURSOR));
+        jPanel2.setLayout(new org.netbeans.lib.awtextra.AbsoluteLayout());
+
+        name.setFont(new java.awt.Font("Segoe UI Black", 0, 30)); // NOI18N
+        name.setForeground(new java.awt.Color(255, 255, 255));
+        name.setText("Address:");
+        jPanel2.add(name, new org.netbeans.lib.awtextra.AbsoluteConstraints(30, 140, -1, -1));
+
+        contact.setFont(new java.awt.Font("Segoe UI Black", 0, 30)); // NOI18N
+        contact.setForeground(new java.awt.Color(255, 255, 255));
+        contact.setText("Contact no.:");
+        jPanel2.add(contact, new org.netbeans.lib.awtextra.AbsoluteConstraints(30, 330, -1, -1));
+
+        email.setFont(new java.awt.Font("Segoe UI Black", 0, 30)); // NOI18N
+        email.setForeground(new java.awt.Color(255, 255, 255));
+        email.setText("Facebook acc:");
+        jPanel2.add(email, new org.netbeans.lib.awtextra.AbsoluteConstraints(30, 200, -1, -1));
+
+        date.setFont(new java.awt.Font("Segoe UI Black", 0, 30)); // NOI18N
+        date.setForeground(new java.awt.Color(255, 255, 255));
+        date.setText("Date of register:");
+        jPanel2.add(date, new org.netbeans.lib.awtextra.AbsoluteConstraints(20, 270, -1, -1));
+
+        costumer.setFont(new java.awt.Font("Segoe UI Black", 0, 30)); // NOI18N
+        costumer.setForeground(new java.awt.Color(255, 255, 255));
+        costumer.setText("Cashier Name:");
+        jPanel2.add(costumer, new org.netbeans.lib.awtextra.AbsoluteConstraints(20, 400, -1, -1));
+
+        w.setForeground(new java.awt.Color(0, 153, 204));
+        w.addActionListener(new java.awt.event.ActionListener() {
+            public void actionPerformed(java.awt.event.ActionEvent evt) {
+                wActionPerformed(evt);
+            }
+        });
+        jPanel2.add(w, new org.netbeans.lib.awtextra.AbsoluteConstraints(280, 130, 560, 48));
+
+        q.setForeground(new java.awt.Color(0, 153, 204));
+        jPanel2.add(q, new org.netbeans.lib.awtextra.AbsoluteConstraints(280, 400, 560, 48));
+
+        s.setForeground(new java.awt.Color(0, 153, 204));
+        jPanel2.add(s, new org.netbeans.lib.awtextra.AbsoluteConstraints(280, 260, 560, 48));
+
+        a.setForeground(new java.awt.Color(0, 153, 204));
+        jPanel2.add(a, new org.netbeans.lib.awtextra.AbsoluteConstraints(280, 200, 560, 48));
+
+        d.setForeground(new java.awt.Color(0, 153, 204));
+        jPanel2.add(d, new org.netbeans.lib.awtextra.AbsoluteConstraints(280, 70, 560, 48));
+
+        q1.setForeground(new java.awt.Color(0, 153, 204));
+        jPanel2.add(q1, new org.netbeans.lib.awtextra.AbsoluteConstraints(280, 330, 560, 48));
+
+        name1.setFont(new java.awt.Font("Segoe UI Black", 0, 30)); // NOI18N
+        name1.setForeground(new java.awt.Color(255, 255, 255));
+        name1.setText("Name:");
+        jPanel2.add(name1, new org.netbeans.lib.awtextra.AbsoluteConstraints(30, 70, -1, -1));
+
+        jButton7.setFont(new java.awt.Font("Segoe UI Black", 0, 30)); // NOI18N
+        jButton7.setForeground(new java.awt.Color(0, 153, 255));
+        jButton7.setText("ADD");
+        jButton7.addActionListener(new java.awt.event.ActionListener() {
+            public void actionPerformed(java.awt.event.ActionEvent evt) {
+                jButton7ActionPerformed(evt);
+            }
+        });
+        jPanel2.add(jButton7, new org.netbeans.lib.awtextra.AbsoluteConstraints(850, 430, 100, 60));
+
+        jButton8.setFont(new java.awt.Font("Segoe UI Black", 0, 30)); // NOI18N
+        jButton8.setForeground(new java.awt.Color(0, 153, 255));
+        jButton8.setText("ID");
+        jButton8.addActionListener(new java.awt.event.ActionListener() {
+            public void actionPerformed(java.awt.event.ActionEvent evt) {
+                jButton8ActionPerformed(evt);
+            }
+        });
+        jPanel2.add(jButton8, new org.netbeans.lib.awtextra.AbsoluteConstraints(670, 460, 110, 30));
+
+        jButton10.setFont(new java.awt.Font("Segoe UI Black", 0, 12)); // NOI18N
+        jButton10.setForeground(new java.awt.Color(0, 153, 255));
+        jButton10.setText("Check slot");
+        jButton10.addActionListener(new java.awt.event.ActionListener() {
+            public void actionPerformed(java.awt.event.ActionEvent evt) {
+                jButton10ActionPerformed(evt);
+            }
+        });
+        jPanel2.add(jButton10, new org.netbeans.lib.awtextra.AbsoluteConstraints(20, 40, 190, 20));
+
+        jButton11.setFont(new java.awt.Font("Segoe UI Black", 0, 12)); // NOI18N
+        jButton11.setForeground(new java.awt.Color(0, 153, 255));
+        jButton11.setText("For employee");
+        jButton11.addActionListener(new java.awt.event.ActionListener() {
+            public void actionPerformed(java.awt.event.ActionEvent evt) {
+                jButton11ActionPerformed(evt);
+            }
+        });
+        jPanel2.add(jButton11, new org.netbeans.lib.awtextra.AbsoluteConstraints(20, 460, 130, 20));
+
+        costumer1.setFont(new java.awt.Font("Segoe UI Black", 0, 30)); // NOI18N
+        costumer1.setForeground(new java.awt.Color(255, 255, 255));
+        costumer1.setText("Slot num:");
+        jPanel2.add(costumer1, new org.netbeans.lib.awtextra.AbsoluteConstraints(30, 0, -1, -1));
+
+        costumer2.setFont(new java.awt.Font("Segoe UI Black", 0, 30)); // NOI18N
+        costumer2.setForeground(new java.awt.Color(255, 255, 255));
+        costumer2.setText("Plan rate:");
+        jPanel2.add(costumer2, new org.netbeans.lib.awtextra.AbsoluteConstraints(490, 10, -1, -1));
+
+        w2.setForeground(new java.awt.Color(0, 153, 204));
+        w2.addActionListener(new java.awt.event.ActionListener() {
+            public void actionPerformed(java.awt.event.ActionEvent evt) {
+                w2ActionPerformed(evt);
+            }
+        });
+        jPanel2.add(w2, new org.netbeans.lib.awtextra.AbsoluteConstraints(280, 10, 200, 48));
+        jPanel2.add(choice1, new org.netbeans.lib.awtextra.AbsoluteConstraints(640, 10, 200, 40));
+
+        jPanel1.add(jPanel2, new org.netbeans.lib.awtextra.AbsoluteConstraints(310, 110, 960, 500));
+
+        jButton4.setFont(new java.awt.Font("Segoe UI Black", 0, 12)); // NOI18N
+        jButton4.setForeground(new java.awt.Color(0, 153, 204));
+        jButton4.setText("Payment");
+        jButton4.addActionListener(new java.awt.event.ActionListener() {
+            public void actionPerformed(java.awt.event.ActionEvent evt) {
+                jButton4ActionPerformed(evt);
+            }
+        });
+        jPanel1.add(jButton4, new org.netbeans.lib.awtextra.AbsoluteConstraints(40, 370, 220, 70));
+
+        jButton9.setFont(new java.awt.Font("Segoe UI Black", 0, 12)); // NOI18N
+        jButton9.setForeground(new java.awt.Color(0, 153, 204));
+        jButton9.setText("History");
+        jButton9.addActionListener(new java.awt.event.ActionListener() {
+            public void actionPerformed(java.awt.event.ActionEvent evt) {
+                jButton9ActionPerformed(evt);
+            }
+        });
+        jPanel1.add(jButton9, new org.netbeans.lib.awtextra.AbsoluteConstraints(40, 460, 220, 70));
+
+        javax.swing.GroupLayout layout = new javax.swing.GroupLayout(getContentPane());
+        getContentPane().setLayout(layout);
+        layout.setHorizontalGroup(
+            layout.createParallelGroup(javax.swing.GroupLayout.Alignment.LEADING)
+            .addGroup(layout.createSequentialGroup()
+                .addComponent(jPanel1, javax.swing.GroupLayout.PREFERRED_SIZE, 1424, javax.swing.GroupLayout.PREFERRED_SIZE)
+                .addGap(0, 0, Short.MAX_VALUE))
+        );
+        layout.setVerticalGroup(
+            layout.createParallelGroup(javax.swing.GroupLayout.Alignment.LEADING)
+            .addGroup(layout.createSequentialGroup()
+                .addComponent(jPanel1, javax.swing.GroupLayout.PREFERRED_SIZE, 872, javax.swing.GroupLayout.PREFERRED_SIZE)
+                .addGap(0, 0, Short.MAX_VALUE))
+        );
+
+        pack();
+    }// </editor-fold>                        
+
+    private void jButton2ActionPerformed(java.awt.event.ActionEvent evt) {                                         
+        adminhome registerFrame=new adminhome(currentUser);
+        registerFrame.setLocationRelativeTo(null);
+        registerFrame.setVisible(true);
+        dispose();  
+
+    }                                        
+
+    private void jButton6ActionPerformed(java.awt.event.ActionEvent evt) {                                         
+         ownerlogin registerFrame=new ownerlogin();
+        registerFrame.setLocationRelativeTo(null);
+        registerFrame.setVisible(true);
+        dispose(); 
+    }                                        
+
+    private void jButton1ActionPerformed(java.awt.event.ActionEvent evt) {                                         
+         adminlist registerFrame = new adminlist(currentUser);
+        registerFrame.setLocationRelativeTo(null);
+        registerFrame.setVisible(true);
+        dispose();
+    }                                        
+
+    private void wActionPerformed(java.awt.event.ActionEvent evt) {                                  
+        // TODO add your handling code here:
+    }                                 
+
+    private void jButton7ActionPerformed(java.awt.event.ActionEvent evt) {                                         
+
+        String slotNum = w2.getText().trim();
+        String address = w.getText().trim();
+        String name = d.getText().trim();
+        String email = a.getText().trim();
+        String dateOfRegister = s.getText().trim();
+        String contactNo = q1.getText().trim();
+        String cashierName = q.getText().trim();
+        String planRate = choice1.getSelectedItem();
+
+        if (slotNum.isEmpty()) {
+            JOptionPane.showMessageDialog(this, "Please enter a Slot Number!");
+            return;
+        }
+        try {
+            Integer.parseInt(slotNum);
+        } catch (NumberFormatException e) {
+            JOptionPane.showMessageDialog(this, "Slot Number must be a number!");
+            return;
+        }
+        if (!isSlotAvailable(slotNum)) {
+            JOptionPane.showMessageDialog(this,
+                "Slot #" + slotNum + " is already occupied!\n\nPlease choose a different slot number.",
+                "Slot Not Available", JOptionPane.ERROR_MESSAGE);
+            History.logHistory("REGISTER_FAILED", slotNum, name, currentUser,
+                "ERROR", "Attempted to register in occupied slot " + slotNum);
+            return;
+        }
+        if (planRate == null || planRate.isEmpty()) {
+            JOptionPane.showMessageDialog(this, "Please select a Plan Rate!");
+            return;
+        }
+        if (address.isEmpty() || name.isEmpty() || email.isEmpty() ||
+            dateOfRegister.isEmpty() || contactNo.isEmpty() || cashierName.isEmpty()) {
+            JOptionPane.showMessageDialog(this, "Please fill in all fields!");
+            return;
+        }
+        if (!name.matches("^[A-Za-z ]+$")) {
+            JOptionPane.showMessageDialog(this, "Name must contain letters only.");
+            return;
+        }
+        if (!cashierName.matches("^[A-Za-z ]+$")) {
+            JOptionPane.showMessageDialog(this, "Cashier Name must contain letters only.");
+            return;
+        }
+        if (email.length() < 2) {
+            JOptionPane.showMessageDialog(this, "Please enter a valid Facebook account name or link.");
+            return;
+        }
+        if (!contactNo.matches("^\\d{11}$")) {
+            JOptionPane.showMessageDialog(this, "Contact number must be exactly 11 digits.");
+            return;
+        }
+
+        String url = "jdbc:mysql://localhost:3306/dbregister?zeroDateTimeBehavior=CONVERT_TO_NULL";
+        String user = "root";
+        String password = "";
+
+        try (Connection conn = DriverManager.getConnection(url, user, password)) {
+
+            String sql = "INSERT INTO clientdata "
+                + "(Name, ContactNumber, CashierName, ProfilePicture, IDPicture, Gmail, "
+                + "DateOfRegister, SlotNum, Address, status, PlanRate, NextDueDate) "
+                + "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)";
+
+            PreparedStatement pstmt = conn.prepareStatement(sql);
+            pstmt.setString(1, name);
+            pstmt.setString(2, contactNo);
+            pstmt.setString(3, cashierName);
+
+            if (selectedImagePath != null) {
+                File imageFile = new File(selectedImagePath);
+                FileInputStream fis = new FileInputStream(imageFile);
+                pstmt.setBinaryStream(4, fis, (int) imageFile.length());
+            } else {
+                pstmt.setNull(4, java.sql.Types.BLOB);
+            }
+
+            if (selectedIDPath != null) {
+                File idFile = new File(selectedIDPath);
+                FileInputStream fis = new FileInputStream(idFile);
+                pstmt.setBinaryStream(5, fis, (int) idFile.length());
+            } else {
+                pstmt.setNull(5, java.sql.Types.BLOB);
+            }
+
+            pstmt.setString(6, email);
+            pstmt.setString(7, dateOfRegister);
+            pstmt.setString(8, slotNum);
+            pstmt.setString(9, address);
+            pstmt.setString(10, "active");
+            pstmt.setString(11, planRate);
+
+            java.time.LocalDate regLocalDate = java.time.LocalDate.parse(dateOfRegister);
+            java.time.LocalDate nextDueDate = regLocalDate.plusMonths(1);
+            pstmt.setDate(12, java.sql.Date.valueOf(nextDueDate));
+
+            int rowsInserted = pstmt.executeUpdate();
+
+            if (rowsInserted > 0) {
+
+                // ── Insert first PAID invoice on registration ────────────
+                try {
+                    double amount = Double.parseDouble(planRate);
+                    String invoiceId = "INV-" + java.util.UUID.randomUUID().toString();
+                    String invSql = "INSERT INTO invoices " +
+                        "(invoice_id, slot_num, invoice_type, invoice_date, invoice_due_date, " +
+                        "invoice_status, invoice_amount, account_status) " +
+                        "VALUES (?, ?, 'Invoice', ?, ?, 'Paid', ?, 'active')";
+                    PreparedStatement invPst = conn.prepareStatement(invSql);
+                    invPst.setString(1, invoiceId);
+                    invPst.setString(2, slotNum);
+                    invPst.setDate(3, java.sql.Date.valueOf(regLocalDate));
+                    invPst.setDate(4, java.sql.Date.valueOf(nextDueDate));
+                    invPst.setDouble(5, amount);
+                    invPst.executeUpdate();
+
+                    // ── Set LastPaymentDate ──────────────────────────────
+                    PreparedStatement updatePay = conn.prepareStatement(
+                        "UPDATE clientdata SET LastPaymentDate = ? WHERE SlotNum = ?");
+                    updatePay.setDate(1, java.sql.Date.valueOf(regLocalDate));
+                    updatePay.setString(2, slotNum);
+                    updatePay.executeUpdate();
+
+                } catch (Exception invoiceEx) {
+                    System.err.println("Warning: Could not create first invoice: " + invoiceEx.getMessage());
+                }
+
+                JOptionPane.showMessageDialog(this, "Customer registered successfully in Slot #" + slotNum + "!");
+                History.logRegister(slotNum, name, cashierName, "Customer " + name + " registered in slot " + slotNum);
+
+               
+                clearFields();
+                setCurrentDate();
+                selectedImagePath = null;
+                selectedIDPath = null;
+                showAvailableSlots();
+            }
+
+        } catch (Exception ex) {
+            JOptionPane.showMessageDialog(this, "Error: " + ex.getMessage());
+            History.logError("REGISTER", currentUser, "Failed to register customer: " + ex.getMessage());
+            ex.printStackTrace();
+        }
+    }
+
+    // ── Show Registration SOA ────────────────────────────────────────────────
+    private void showRegistrationSOA(String slotNum, String customerName, String customerContact,
+                                      String address, String regDate, String planRate, String nextDue) {
+
+        String DB_URL  = "jdbc:mysql://localhost:3306/dbregister?zeroDateTimeBehavior=CONVERT_TO_NULL";
+        String DB_USER = "root", DB_PASS = "";
+
+        javax.swing.table.DefaultTableModel invoiceModel = new javax.swing.table.DefaultTableModel(
+            new String[]{"Invoice #", "Type", "Bill Date", "Due Date", "Acct Status", "Payment Status", "Amount"}, 0
+        ) { @Override public boolean isCellEditable(int r, int c) { return false; } };
+
+        double totalPaid = 0;
+       try (Connection conn = DriverManager.getConnection(DB_URL, DB_USER, DB_PASS)) {
+    
+    // Check if any invoice exists for this slot
+    PreparedStatement checkPst = conn.prepareStatement(
+        "SELECT COUNT(*) FROM invoices WHERE slot_num = ?");
+    checkPst.setString(1, slotNum);
+    ResultSet checkRs = checkPst.executeQuery();
+    checkRs.next();
+    
+    if (checkRs.getInt(1) == 0) {
+        // No invoices exist — create the first one
+        PreparedStatement fixPst = conn.prepareStatement(
+            "INSERT INTO invoices " +
+            "(invoice_id, slot_num, invoice_type, invoice_date, invoice_due_date, " +
+            "invoice_status, invoice_amount, account_status) " +
+            "VALUES (?, ?, 'Invoice', ?, ?, 'Paid', ?, 'active')");
+        fixPst.setString(1, "INV-" + System.currentTimeMillis());
+        fixPst.setString(2, slotNum);
+        fixPst.setDate(3, java.sql.Date.valueOf(
+            java.time.LocalDate.parse(regDate)));           // bill date = register date
+        fixPst.setDate(4, java.sql.Date.valueOf(
+            java.time.LocalDate.parse(regDate).plusMonths(1))); // due = +1 month
+        fixPst.setDouble(5, Double.parseDouble(planRate));  // correct plan rate
+        fixPst.executeUpdate();
+    }
+} catch (Exception ex) {
+    System.err.println("Auto-fix invoice error: " + ex.getMessage());
+}
+
+        javax.swing.JDialog soaDialog = new javax.swing.JDialog(this, "Statement of Accounts - Slot #" + slotNum, true);
+        soaDialog.setLayout(new java.awt.BorderLayout());
+        soaDialog.getContentPane().setBackground(java.awt.Color.WHITE);
+
+        java.awt.Insets si = java.awt.Toolkit.getDefaultToolkit()
+            .getScreenInsets(java.awt.GraphicsEnvironment.getLocalGraphicsEnvironment()
+            .getDefaultScreenDevice().getDefaultConfiguration());
+        java.awt.Dimension ss = java.awt.Toolkit.getDefaultToolkit().getScreenSize();
+        soaDialog.setSize(ss.width - si.left - si.right, ss.height - si.top - si.bottom);
+        soaDialog.setLocation(si.left, si.top);
+
+        // ── HEADER ──────────────────────────────────────────────────────────
+        javax.swing.JPanel headerPanel = new javax.swing.JPanel(new java.awt.BorderLayout());
+        headerPanel.setBackground(new java.awt.Color(0, 102, 204));
+        headerPanel.setPreferredSize(new java.awt.Dimension(0, 90));
+        headerPanel.setBorder(javax.swing.BorderFactory.createEmptyBorder(10, 20, 10, 20));
+        javax.swing.JPanel leftH = new javax.swing.JPanel();
+        leftH.setLayout(new javax.swing.BoxLayout(leftH, javax.swing.BoxLayout.Y_AXIS));
+        leftH.setBackground(new java.awt.Color(0, 102, 204));
+        javax.swing.JLabel compLbl = new javax.swing.JLabel("PIPOL BROADBAND");
+        compLbl.setFont(new java.awt.Font("Segoe UI Black", java.awt.Font.BOLD, 26));
+        compLbl.setForeground(java.awt.Color.WHITE);
+        javax.swing.JLabel soaTitleLbl = new javax.swing.JLabel("STATEMENT OF ACCOUNTS");
+        soaTitleLbl.setFont(new java.awt.Font("Segoe UI", java.awt.Font.PLAIN, 13));
+        soaTitleLbl.setForeground(new java.awt.Color(200, 230, 255));
+        leftH.add(compLbl); leftH.add(soaTitleLbl);
+        javax.swing.JPanel rightH = new javax.swing.JPanel();
+        rightH.setLayout(new javax.swing.BoxLayout(rightH, javax.swing.BoxLayout.Y_AXIS));
+        rightH.setBackground(new java.awt.Color(0, 102, 204));
+        javax.swing.JLabel dateLbl = new javax.swing.JLabel("Date Printed: " +
+            java.time.LocalDate.now().format(java.time.format.DateTimeFormatter.ofPattern("MMMM dd, yyyy")));
+        dateLbl.setFont(new java.awt.Font("Segoe UI", java.awt.Font.PLAIN, 12));
+        dateLbl.setForeground(java.awt.Color.WHITE);
+        dateLbl.setAlignmentX(java.awt.Component.RIGHT_ALIGNMENT);
+        javax.swing.JLabel slotLbl = new javax.swing.JLabel("Slot #: " + slotNum);
+        slotLbl.setFont(new java.awt.Font("Segoe UI", java.awt.Font.BOLD, 13));
+        slotLbl.setForeground(java.awt.Color.WHITE);
+        slotLbl.setAlignmentX(java.awt.Component.RIGHT_ALIGNMENT);
+        rightH.add(dateLbl); rightH.add(javax.swing.Box.createVerticalStrut(4)); rightH.add(slotLbl);
+        headerPanel.add(leftH, java.awt.BorderLayout.WEST);
+        headerPanel.add(rightH, java.awt.BorderLayout.EAST);
+
+        // ── INFO STRIP ──────────────────────────────────────────────────────
+        javax.swing.JPanel infoStrip = new javax.swing.JPanel(new java.awt.GridLayout(1, 5, 0, 0));
+        infoStrip.setBackground(new java.awt.Color(240, 245, 255));
+        infoStrip.setBorder(javax.swing.BorderFactory.createCompoundBorder(
+            javax.swing.BorderFactory.createMatteBorder(0, 0, 2, 0, new java.awt.Color(0, 102, 204)),
+            javax.swing.BorderFactory.createEmptyBorder(10, 20, 10, 20)));
+        infoStrip.add(makeRegInfoBlock("Customer Name",   customerName));
+        infoStrip.add(makeRegInfoBlock("Contact Number",  customerContact));
+        infoStrip.add(makeRegInfoBlock("Address",         address));
+        infoStrip.add(makeRegInfoBlock("Registered Date", regDate));
+        infoStrip.add(makeRegInfoBlock("Plan Rate",       "\u20b1" + planRate));
+
+        // ── STATUS BAR ──────────────────────────────────────────────────────
+        javax.swing.JPanel statusBar = new javax.swing.JPanel(new java.awt.FlowLayout(java.awt.FlowLayout.LEFT, 20, 8));
+        statusBar.setBackground(new java.awt.Color(230, 255, 230));
+        statusBar.setBorder(javax.swing.BorderFactory.createMatteBorder(0, 0, 1, 0, java.awt.Color.LIGHT_GRAY));
+        javax.swing.JLabel statusBadge = new javax.swing.JLabel("  \u25cf Account Status: ACTIVE  ");
+        statusBadge.setFont(new java.awt.Font("Segoe UI Black", java.awt.Font.BOLD, 13));
+        statusBadge.setOpaque(true);
+        statusBadge.setBackground(new java.awt.Color(0, 180, 0));
+        statusBadge.setForeground(java.awt.Color.WHITE);
+        statusBadge.setBorder(javax.swing.BorderFactory.createEmptyBorder(4, 8, 4, 8));
+        javax.swing.JLabel lastPayLbl = new javax.swing.JLabel("Last Payment: " + regDate);
+        lastPayLbl.setFont(new java.awt.Font("Segoe UI", java.awt.Font.PLAIN, 12));
+        lastPayLbl.setForeground(new java.awt.Color(60, 60, 60));
+        javax.swing.JLabel nextDueLbl = new javax.swing.JLabel("Next Due: " + nextDue);
+        nextDueLbl.setFont(new java.awt.Font("Segoe UI", java.awt.Font.BOLD, 12));
+        nextDueLbl.setForeground(new java.awt.Color(0, 130, 0));
+        statusBar.add(statusBadge); statusBar.add(lastPayLbl); statusBar.add(nextDueLbl);
+
+        javax.swing.JPanel northComposite = new javax.swing.JPanel(new java.awt.BorderLayout());
+        northComposite.add(headerPanel, java.awt.BorderLayout.NORTH);
+        northComposite.add(infoStrip,   java.awt.BorderLayout.CENTER);
+        northComposite.add(statusBar,   java.awt.BorderLayout.SOUTH);
+
+        // ── INVOICE TABLE ────────────────────────────────────────────────────
+        javax.swing.JTable invoiceTable = new javax.swing.JTable(invoiceModel);
+        invoiceTable.setRowHeight(30);
+        invoiceTable.setFont(new java.awt.Font("Segoe UI", java.awt.Font.PLAIN, 12));
+        invoiceTable.setGridColor(new java.awt.Color(220, 225, 235));
+        invoiceTable.getTableHeader().setFont(new java.awt.Font("Segoe UI", java.awt.Font.BOLD, 12));
+        invoiceTable.getTableHeader().setBackground(new java.awt.Color(0, 102, 204));
+        invoiceTable.getTableHeader().setForeground(java.awt.Color.WHITE);
+        invoiceTable.getTableHeader().setPreferredSize(new java.awt.Dimension(0, 36));
+        int[] colWidths = {200, 90, 110, 110, 100, 120, 100};
+        for (int i = 0; i < colWidths.length; i++)
+            invoiceTable.getColumnModel().getColumn(i).setPreferredWidth(colWidths[i]);
+
+        invoiceTable.getColumnModel().getColumn(5).setCellRenderer(new javax.swing.table.DefaultTableCellRenderer() {
+            @Override public java.awt.Component getTableCellRendererComponent(
+                    javax.swing.JTable t, Object val, boolean sel, boolean foc, int row, int col) {
+                javax.swing.JLabel lbl = (javax.swing.JLabel) super.getTableCellRendererComponent(t, val, sel, foc, row, col);
+                lbl.setHorizontalAlignment(javax.swing.JLabel.CENTER);
+                lbl.setFont(lbl.getFont().deriveFont(java.awt.Font.BOLD));
+                if (!sel) {
+                    lbl.setBackground(new java.awt.Color(220, 255, 220));
+                    lbl.setForeground(new java.awt.Color(0, 140, 0));
+                    lbl.setText("\u2713 Paid");
+                }
+                return lbl;
+            }
+        });
+
+        invoiceTable.getColumnModel().getColumn(4).setCellRenderer(new javax.swing.table.DefaultTableCellRenderer() {
+            @Override public java.awt.Component getTableCellRendererComponent(
+                    javax.swing.JTable t, Object val, boolean sel, boolean foc, int row, int col) {
+                javax.swing.JLabel lbl = (javax.swing.JLabel) super.getTableCellRendererComponent(t, val, sel, foc, row, col);
+                lbl.setHorizontalAlignment(javax.swing.JLabel.CENTER);
+                lbl.setFont(lbl.getFont().deriveFont(java.awt.Font.BOLD));
+                if (!sel) {
+                    lbl.setBackground(new java.awt.Color(220, 255, 220));
+                    lbl.setForeground(new java.awt.Color(0, 130, 0));
+                }
+                return lbl;
+            }
+        });
+
+        javax.swing.JScrollPane tableScroll = new javax.swing.JScrollPane(invoiceTable);
+        tableScroll.setBorder(javax.swing.BorderFactory.createEmptyBorder(10, 15, 5, 15));
+        tableScroll.getViewport().setBackground(java.awt.Color.WHITE);
+        javax.swing.JPanel tablePanel = new javax.swing.JPanel(new java.awt.BorderLayout());
+        tablePanel.setBackground(java.awt.Color.WHITE);
+        tablePanel.add(tableScroll, java.awt.BorderLayout.CENTER);
+
+        // ── SUMMARY ─────────────────────────────────────────────────────────
+        javax.swing.JPanel summaryPanel = new javax.swing.JPanel(new java.awt.FlowLayout(java.awt.FlowLayout.LEFT, 25, 10));
+        summaryPanel.setBackground(new java.awt.Color(240, 245, 255));
+        summaryPanel.setBorder(javax.swing.BorderFactory.createMatteBorder(2, 0, 0, 0, new java.awt.Color(0, 102, 204)));
+        summaryPanel.setPreferredSize(new java.awt.Dimension(0, 55));
+        javax.swing.JLabel billedLbl = new javax.swing.JLabel(String.format("Total Billed: \u20b1%.2f", totalPaid));
+        billedLbl.setFont(new java.awt.Font("Segoe UI", java.awt.Font.BOLD, 13));
+        billedLbl.setForeground(new java.awt.Color(0, 60, 150));
+        javax.swing.JLabel paidLbl = new javax.swing.JLabel(String.format("\u2713 Paid: \u20b1%.2f", totalPaid));
+        paidLbl.setFont(new java.awt.Font("Segoe UI", java.awt.Font.BOLD, 12));
+        paidLbl.setForeground(new java.awt.Color(0, 140, 0));
+        javax.swing.JLabel balLbl = new javax.swing.JLabel("\u2717 Balance: \u20b10.00");
+        balLbl.setFont(new java.awt.Font("Segoe UI", java.awt.Font.BOLD, 12));
+        balLbl.setForeground(new java.awt.Color(0, 140, 0));
+        summaryPanel.add(billedLbl); summaryPanel.add(paidLbl); summaryPanel.add(balLbl);
+
+        // ── BUTTONS ─────────────────────────────────────────────────────────
+        javax.swing.JPanel btnPanel = new javax.swing.JPanel(new java.awt.FlowLayout(java.awt.FlowLayout.CENTER, 15, 10));
+        btnPanel.setBackground(new java.awt.Color(245, 245, 245));
+        btnPanel.setBorder(javax.swing.BorderFactory.createMatteBorder(1, 0, 0, 0, java.awt.Color.LIGHT_GRAY));
+        btnPanel.setPreferredSize(new java.awt.Dimension(0, 65));
+
+        javax.swing.JButton printBtn = new javax.swing.JButton("PRINT SOA");
+        printBtn.setFont(new java.awt.Font("Segoe UI Black", java.awt.Font.BOLD, 13));
+        printBtn.setBackground(new java.awt.Color(0, 153, 51));
+        printBtn.setForeground(java.awt.Color.WHITE);
+        printBtn.setFocusPainted(false);
+        printBtn.setPreferredSize(new java.awt.Dimension(160, 42));
+        printBtn.addActionListener(e -> {
+            java.awt.print.PrinterJob pj = java.awt.print.PrinterJob.getPrinterJob();
+            pj.setPrintable((g, pf, pi) -> {
+                if (pi > 0) return java.awt.print.Printable.NO_SUCH_PAGE;
+                java.awt.Graphics2D g2 = (java.awt.Graphics2D) g;
+                g2.translate(pf.getImageableX(), pf.getImageableY());
+                double scale = Math.min(pf.getImageableWidth() / soaDialog.getWidth(),
+                                        pf.getImageableHeight() / soaDialog.getHeight());
+                g2.scale(scale, scale);
+                soaDialog.printAll(g2);
+                return java.awt.print.Printable.PAGE_EXISTS;
+            });
+            if (pj.printDialog()) {
+                try { pj.print(); } catch (java.awt.print.PrinterException pe) {
+                    JOptionPane.showMessageDialog(soaDialog, "Print error: " + pe.getMessage());
+                }
+            }
+        });
+
+        javax.swing.JButton closeBtn = new javax.swing.JButton("CLOSE");
+        closeBtn.setFont(new java.awt.Font("Segoe UI Black", java.awt.Font.BOLD, 13));
+        closeBtn.setBackground(new java.awt.Color(180, 0, 0));
+        closeBtn.setForeground(java.awt.Color.WHITE);
+        closeBtn.setFocusPainted(false);
+        closeBtn.setPreferredSize(new java.awt.Dimension(130, 42));
+        closeBtn.addActionListener(e -> soaDialog.dispose());
+        btnPanel.add(printBtn); btnPanel.add(closeBtn);
+
+        javax.swing.JPanel southComposite = new javax.swing.JPanel(new java.awt.BorderLayout());
+        southComposite.add(summaryPanel, java.awt.BorderLayout.CENTER);
+        southComposite.add(btnPanel,     java.awt.BorderLayout.SOUTH);
+
+        soaDialog.add(northComposite, java.awt.BorderLayout.NORTH);
+        soaDialog.add(tablePanel,     java.awt.BorderLayout.CENTER);
+        soaDialog.add(southComposite, java.awt.BorderLayout.SOUTH);
+        soaDialog.setVisible(true);
+    }
+
+    // ── Helper: info block for registration SOA ──────────────────────────────
+    private javax.swing.JPanel makeRegInfoBlock(String label, String value) {
+        javax.swing.JPanel block = new javax.swing.JPanel();
+        block.setLayout(new javax.swing.BoxLayout(block, javax.swing.BoxLayout.Y_AXIS));
+        block.setBackground(new java.awt.Color(240, 245, 255));
+        javax.swing.JLabel lbl = new javax.swing.JLabel(label);
+        lbl.setFont(new java.awt.Font("Segoe UI", java.awt.Font.BOLD, 10));
+        lbl.setForeground(new java.awt.Color(100, 100, 130));
+        javax.swing.JLabel val = new javax.swing.JLabel(value != null ? value : "N/A");
+        val.setFont(new java.awt.Font("Segoe UI", java.awt.Font.PLAIN, 12));
+        val.setForeground(new java.awt.Color(30, 30, 60));
+        block.add(lbl);
+        block.add(javax.swing.Box.createVerticalStrut(2));
+        block.add(val);
+        return block;
+    }                                        
+
+    private void jButton8ActionPerformed(java.awt.event.ActionEvent evt) {                                         
+          JFileChooser fileChooser = new JFileChooser();
+        fileChooser.setDialogTitle("Select ID Picture");
+        FileNameExtensionFilter filter = new FileNameExtensionFilter("Image Files", "jpg", "jpeg", "png", "gif");
+        fileChooser.setFileFilter(filter);
+        
+        int result = fileChooser.showOpenDialog(this);
+        if (result == JFileChooser.APPROVE_OPTION) {
+            selectedIDPath = fileChooser.getSelectedFile().getAbsolutePath();
+            JOptionPane.showMessageDialog(this, "✅ ID picture selected: " + fileChooser.getSelectedFile().getName());
+        }
+    }                                        
+
+    private void jButton4ActionPerformed(java.awt.event.ActionEvent evt) {                                         
+adminpayment registerFrame = new adminpayment(currentUser);
+        registerFrame.setLocationRelativeTo(null);
+        registerFrame.setVisible(true);
+        dispose();
+    }                                        
+
+    private void jButton9ActionPerformed(java.awt.event.ActionEvent evt) {                                         
+      History registerFrame = new History();
+        registerFrame.setLocationRelativeTo(null);
+        registerFrame.setVisible(true);
+        dispose();
+    }                                        
+
+    private void jButton10ActionPerformed(java.awt.event.ActionEvent evt) {                                          
+        String url = "jdbc:mysql://localhost:3306/dbregister?zeroDateTimeBehavior=CONVERT_TO_NULL";
+        String user = "root";
+        String password = "";
+
+        try (Connection conn = DriverManager.getConnection(url, user, password)) {
+            // Get all occupied slots
+            String sql = "SELECT SlotNum FROM clientdata ORDER BY CAST(SlotNum AS UNSIGNED)";
+            PreparedStatement pstmt = conn.prepareStatement(sql);
+            ResultSet rs = pstmt.executeQuery();
+
+            List<Integer> occupiedSlots = new ArrayList<>();
+            int maxSlot = 0;
+            
+            while (rs.next()) {
+                int slotNum = Integer.parseInt(rs.getString("SlotNum"));
+                occupiedSlots.add(slotNum);
+                if (slotNum > maxSlot) {
+                    maxSlot = slotNum;
+                }
+            }
+
+            // Find free slots (up to maxSlot + 10)
+            List<Integer> freeSlots = new ArrayList<>();
+int checkUpTo = 500;            
+            for (int i = 1; i <= checkUpTo; i++) {
+                if (!occupiedSlots.contains(i)) {
+                    freeSlots.add(i);
+                }
+            }
+
+            // ✅ LOG: Checked available slots
+            History.logHistory("CHECK_SLOTS", null, null, currentUser, 
+                             "SUCCESS", "Checked available slots. Free slots: " + freeSlots.size());
+            
+            // ✅ CREATE CUSTOM DIALOG WITH CLICKABLE BUTTONS
+            showSlotSelectionDialog(occupiedSlots, freeSlots);
+
+        } catch (SQLException ex) {
+            JOptionPane.showMessageDialog(this, "❌ Error checking slots: " + ex.getMessage());
+            History.logError("CHECK_SLOTS", currentUser, "Failed to check slots: " + ex.getMessage());
+        }
+    }
+    
+   private void showSlotSelectionDialog(List<Integer> occupiedSlots, List<Integer> freeSlots) {
+    javax.swing.JDialog dialog = new javax.swing.JDialog(this, "Slot Availability", true);
+    dialog.setSize(750, 620);
+    dialog.setLocationRelativeTo(this);
+    dialog.setLayout(new java.awt.BorderLayout(5, 5));
+
+    // ── TITLE ────────────────────────────────────────────────────────────────
+    javax.swing.JPanel titlePanel = new javax.swing.JPanel(new java.awt.BorderLayout());
+    titlePanel.setBackground(new java.awt.Color(0, 102, 204));
+    titlePanel.setPreferredSize(new java.awt.Dimension(0, 55));
+    javax.swing.JLabel titleLabel = new javax.swing.JLabel("  SLOT AVAILABILITY");
+    titleLabel.setFont(new java.awt.Font("Segoe UI Black", java.awt.Font.BOLD, 22));
+    titleLabel.setForeground(java.awt.Color.WHITE);
+    javax.swing.JLabel summaryLabel = new javax.swing.JLabel(
+        "🟢 " + freeSlots.size() + " Free  |  🔴 " + occupiedSlots.size() + " Occupied  ");
+    summaryLabel.setFont(new java.awt.Font("Segoe UI", java.awt.Font.BOLD, 13));
+    summaryLabel.setForeground(java.awt.Color.WHITE);
+    summaryLabel.setHorizontalAlignment(javax.swing.SwingConstants.RIGHT);
+    titlePanel.add(titleLabel, java.awt.BorderLayout.WEST);
+    titlePanel.add(summaryLabel, java.awt.BorderLayout.EAST);
+
+    // ── SEARCH BAR ───────────────────────────────────────────────────────────
+    javax.swing.JPanel searchPanel = new javax.swing.JPanel(new java.awt.FlowLayout(java.awt.FlowLayout.LEFT, 10, 5));
+    searchPanel.setBackground(new java.awt.Color(0, 130, 220));
+    javax.swing.JLabel searchLbl = new javax.swing.JLabel("Search Slot #:");
+    searchLbl.setForeground(java.awt.Color.WHITE);
+    searchLbl.setFont(new java.awt.Font("Segoe UI", java.awt.Font.BOLD, 13));
+    javax.swing.JTextField searchField = new javax.swing.JTextField(10);
+    searchField.setFont(new java.awt.Font("Segoe UI", java.awt.Font.PLAIN, 13));
+    searchPanel.add(searchLbl);
+    searchPanel.add(searchField);
+
+    javax.swing.JPanel topPanel = new javax.swing.JPanel(new java.awt.BorderLayout());
+    topPanel.add(titlePanel, java.awt.BorderLayout.NORTH);
+    topPanel.add(searchPanel, java.awt.BorderLayout.SOUTH);
+
+    // ── SLOT GRID (all slots, vertical scroll) ───────────────────────────────
+javax.swing.JPanel gridPanel = new javax.swing.JPanel(new java.awt.GridLayout(0, 10, 6, 6));
+gridPanel.setBackground(new java.awt.Color(0, 153, 204));
+
+    Runnable renderSlots = () -> {
+        gridPanel.removeAll();
+        String sf = searchField.getText().trim();
+        for (int slot = 1; slot <= 500; slot++) {
+            if (!sf.isEmpty() && !String.valueOf(slot).contains(sf)) continue;
+            boolean occupied = occupiedSlots.contains(slot);
+            javax.swing.JButton btn = new javax.swing.JButton(
+                "<html><center>" + slot + "<br><small>" + (occupied ? "Occ" : "Avl") + "</small></center></html>");
+            btn.setPreferredSize(new java.awt.Dimension(68, 55));
+            btn.setFont(new java.awt.Font("Segoe UI Black", java.awt.Font.BOLD, 12));
+            btn.setFocusPainted(false);
+            btn.setBorder(javax.swing.BorderFactory.createLineBorder(java.awt.Color.WHITE, 2));
+            if (occupied) {
+                btn.setBackground(new java.awt.Color(200, 50, 50));
+                btn.setForeground(java.awt.Color.WHITE);
+            } else {
+                btn.setBackground(new java.awt.Color(0, 200, 90));
+                btn.setForeground(java.awt.Color.WHITE);
+                final int s = slot;
+                btn.addActionListener(e -> {
+w2.setText(String.valueOf(s));
+                    JOptionPane.showMessageDialog(dialog,
+                        "✅ Slot #" + s + " selected!", "Slot Selected",
+                        JOptionPane.INFORMATION_MESSAGE);
+                    dialog.dispose();
+                });
+            }
+            gridPanel.add(btn);
+        }
+        gridPanel.revalidate();
+        gridPanel.repaint();
+    };
+
+    searchField.getDocument().addDocumentListener(new javax.swing.event.DocumentListener() {
+        public void insertUpdate(javax.swing.event.DocumentEvent e)  { renderSlots.run(); }
+        public void removeUpdate(javax.swing.event.DocumentEvent e)  { renderSlots.run(); }
+        public void changedUpdate(javax.swing.event.DocumentEvent e) { renderSlots.run(); }
+    });
+
+    renderSlots.run();
+
+    javax.swing.JScrollPane scrollPane = new javax.swing.JScrollPane(gridPanel);
+    scrollPane.setBorder(javax.swing.BorderFactory.createEmptyBorder());
+    scrollPane.getViewport().setBackground(new java.awt.Color(0, 153, 204));
+    scrollPane.setVerticalScrollBarPolicy(javax.swing.JScrollPane.VERTICAL_SCROLLBAR_ALWAYS);
+    scrollPane.setHorizontalScrollBarPolicy(javax.swing.JScrollPane.HORIZONTAL_SCROLLBAR_NEVER);
+    scrollPane.getVerticalScrollBar().setUnitIncrement(16);
+
+    // ── CLOSE BUTTON ─────────────────────────────────────────────────────────
+    javax.swing.JPanel bottomPanel = new javax.swing.JPanel();
+    bottomPanel.setBackground(new java.awt.Color(0, 102, 204));
+    javax.swing.JButton closeButton = new javax.swing.JButton("CLOSE");
+    closeButton.setFont(new java.awt.Font("Segoe UI Black", java.awt.Font.BOLD, 14));
+    closeButton.setBackground(new java.awt.Color(220, 30, 30));
+    closeButton.setForeground(java.awt.Color.WHITE);
+    closeButton.setPreferredSize(new java.awt.Dimension(120, 38));
+    closeButton.setFocusPainted(false);
+    closeButton.addActionListener(e -> dialog.dispose());
+    bottomPanel.add(closeButton);
+
+    dialog.add(topPanel,    java.awt.BorderLayout.NORTH);
+    dialog.add(scrollPane,  java.awt.BorderLayout.CENTER);
+    dialog.add(bottomPanel, java.awt.BorderLayout.SOUTH);
+    dialog.setVisible(true);
+    }                                         
+// WrapLayout - makes buttons wrap vertically when resizing
+static class WrapLayout extends java.awt.FlowLayout {
+    public WrapLayout(int align, int hgap, int vgap) { super(align, hgap, vgap); }
+    @Override
+    public java.awt.Dimension preferredLayoutSize(java.awt.Container target) {
+        return layoutSize(target, true);
+    }
+    private java.awt.Dimension layoutSize(java.awt.Container target, boolean preferred) {
+        synchronized (target.getTreeLock()) {
+            int targetWidth = target.getSize().width;
+            if (targetWidth == 0) targetWidth = Integer.MAX_VALUE;
+            int hgap = getHgap(), vgap = getVgap();
+            java.awt.Insets insets = target.getInsets();
+            int maxWidth = targetWidth - (insets.left + insets.right + hgap * 2);
+            int width = 0, height = insets.top + insets.bottom + vgap * 2;
+            int rowWidth = 0, rowHeight = 0;
+            for (int i = 0; i < target.getComponentCount(); i++) {
+                java.awt.Component c = target.getComponent(i);
+                if (c.isVisible()) {
+                    java.awt.Dimension d = preferred ? c.getPreferredSize() : c.getMinimumSize();
+                    if (rowWidth + d.width > maxWidth && rowWidth > 0) {
+                        height += rowHeight + vgap;
+                        rowWidth = 0; rowHeight = 0;
+                    }
+                    rowWidth += d.width + hgap;
+                    rowHeight = Math.max(rowHeight, d.height);
+                    width = Math.max(width, rowWidth);
+                }
+            }
+            height += rowHeight;
+            return new java.awt.Dimension(width, height);
+        }
+    }
+}
+    private void jButton11ActionPerformed(java.awt.event.ActionEvent evt) {                                          
+        DBConnection registerFrame = new DBConnection();
+        registerFrame.setLocationRelativeTo(null);
+        registerFrame.setVisible(true);
+        dispose();
+    }                                         
+
+    private void w2ActionPerformed(java.awt.event.ActionEvent evt) {                                   
+        // TODO add your handling code here:
+    }                                  
+
+    /**
+     * @param args the command line arguments
+     */
+    public static void main(String args[]) {
+        /* Set the Nimbus look and feel */
+        //<editor-fold defaultstate="collapsed" desc=" Look and feel setting code (optional) ">
+        try {
+            for (javax.swing.UIManager.LookAndFeelInfo info : javax.swing.UIManager.getInstalledLookAndFeels()) {
+                if ("Nimbus".equals(info.getName())) {
+                    javax.swing.UIManager.setLookAndFeel(info.getClassName());
+                    break;
+                }
+            }
+        } catch (ReflectiveOperationException | javax.swing.UnsupportedLookAndFeelException ex) {
+            logger.log(java.util.logging.Level.SEVERE, null, ex);
+        }
+        //</editor-fold>
+
+        /* Create and display the form */
+        java.awt.EventQueue.invokeLater(() -> new adminhome().setVisible(true));
+    }
+    // Variables declaration - do not modify                     
+    private javax.swing.JTextField a;
+    private java.awt.Choice choice1;
+    private javax.swing.JLabel contact;
+    private javax.swing.JLabel costumer;
+    private javax.swing.JLabel costumer1;
+    private javax.swing.JLabel costumer2;
+    private javax.swing.JTextField d;
+    private javax.swing.JLabel date;
+    private javax.swing.JLabel email;
+    private javax.swing.JButton jButton1;
+    private javax.swing.JButton jButton10;
+    private javax.swing.JButton jButton11;
+    private javax.swing.JButton jButton2;
+    private javax.swing.JButton jButton4;
+    private javax.swing.JButton jButton6;
+    private javax.swing.JButton jButton7;
+    private javax.swing.JButton jButton8;
+    private javax.swing.JButton jButton9;
+    private javax.swing.JLabel jLabel1;
+    private javax.swing.JLabel jLabel7;
+    private javax.swing.JPanel jPanel1;
+    private javax.swing.JPanel jPanel2;
+    private javax.swing.JLabel name;
+    private javax.swing.JLabel name1;
+    private javax.swing.JTextField q;
+    private javax.swing.JTextField q1;
+    private javax.swing.JTextField s;
+    private javax.swing.JTextField w;
+    private javax.swing.JTextField w2;
+    // End of variables declaration                   
+}
